@@ -11,9 +11,9 @@
     "network",
     "tools"
   ],
-  "repository": "https://github.com/xchwarze/",
-  "bugs": "https://github.com/xchwarze/",
-  "homepage": "https://github.com/xchwarze/",
+  "repository": "https://github.com/xchwarze/frieren-modules/tcpdump",
+  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
+  "homepage": "https://github.com/xchwarze/frieren-modules",
   "guestType": [
     "OpenWrt"
   ],
