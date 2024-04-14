@@ -1,6 +1,6 @@
 {
   "title": "Demo Module",
-  "name": "demo-module",
+  "name": "demo",
   "description": "Demo for scaffolding a new module",
   "icon": "zap",
   "author": {
