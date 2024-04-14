@@ -11,7 +11,7 @@
     "hash",
     "wpa"
   ],
-  "repository": "https://github.com/xchwarze/frieren-modules/wpaonlinecrack",
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/wpaonlinecrack",
   "bugs": "https://github.com/xchwarze/frieren-modules/issues",
   "homepage": "https://github.com/xchwarze/frieren-modules",
   "guestType": [

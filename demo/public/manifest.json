@@ -10,7 +10,7 @@
   "keywords": [
     "development"
   ],
-  "repository": "https://github.com/xchwarze/frieren-modules/demo",
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/demo",
   "bugs": "https://github.com/xchwarze/frieren-modules/issues",
   "homepage": "https://github.com/xchwarze/frieren-modules",
   "system": false,

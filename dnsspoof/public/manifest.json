@@ -10,7 +10,7 @@
   "keywords": [
     "dns"
   ],
-  "repository": "https://github.com/xchwarze/frieren-modules/dnsspoof",
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/dnsspoof",
   "bugs": "https://github.com/xchwarze/frieren-modules/issues",
   "homepage": "https://github.com/xchwarze/frieren-modules",
   "guestType": [

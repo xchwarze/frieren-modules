@@ -11,7 +11,7 @@
     "network",
     "tools"
   ],
-  "repository": "https://github.com/xchwarze/frieren-modules/tcpdump",
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/tcpdump",
   "bugs": "https://github.com/xchwarze/frieren-modules/issues",
   "homepage": "https://github.com/xchwarze/frieren-modules",
   "guestType": [
