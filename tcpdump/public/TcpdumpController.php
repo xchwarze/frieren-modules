@@ -38,7 +38,7 @@ class TcpdumpController extends \frieren\core\Controller
         $filename = date('Y-m-d\TH-i-s') . '.pcap';
         $pcapFilePath = "{$this->pcapDirectory}/{$filename}";
         $command = escapeshellcmd($this->request['command']);
-        OpenWrtHelper::execBackground("tcpdump {$command} -w {$pcapFilePath} &> {$this->logPath}");
+        OpenWrtHelper::execBackground("tcpdump {$command} -w {$pcapFilePath}", "{$this->logPath} 2>&1");
 
         return self::setSuccess([
             'outputFile' => $filename
