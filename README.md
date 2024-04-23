@@ -1,10 +1,8 @@
 # Frieren Modules Repository
 
-## Overview
-
-This repository contains a collection of modules developed for the Frieren ecosystem. Each module extends the functionality of the Frieren micro-framework, offering specialized features and enhancements tailored for routers and Single Board Computers (SBCs).
-
 ## Description
+
+This repository contains a collection of modules developed for the [Frieren ecosystem](https://github.com/xchwarze/frieren).
 
 Modules in this repository are built using the `frieren-module-template`, designed to ensure seamless integration and consistent performance across the Frieren platform. These modules leverage modern technologies and are developed with the UMD (Universal Module Definition) standard, making them versatile for various deployment scenarios.
 
@@ -38,12 +36,6 @@ Contributions are welcome! If you have developed a module using the `frieren-mod
 ## License
 
 All modules in this repository are distributed under the LGPL-3.0-only License, facilitating open-source collaboration and distribution.
-
-## Contact
-
-For support or queries regarding any module, please contact:
-
-- **Email**: xchwarze@gmail.com
 
 ## Acknowledgments
 
