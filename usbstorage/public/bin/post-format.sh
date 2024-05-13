@@ -47,7 +47,17 @@ sleep 2
 
 # Link the /etc directory if it is not already linked
 if [ ! -e "/sd/etc" ]; then
+    echo "[+] Linked /etc directory to /sd/etc"
     ln -s /etc/ /sd/etc
+fi
+
+# Copy the hotplug script
+SCRIPT_DIR=$(dirname "$0")
+HOTPLUG_SOURCE="$SCRIPT_DIR/../files/20-sd-loader"
+HOTPLUG_TARGET="/etc/hotplug.d/block/20-sd-loader"
+if [ ! -f "$HOTPLUG_TARGET" ]; then
+    echo "[+] Copied 20-sd-loader to /etc/hotplug.d/block"
+    cp "$HOTPLUG_SOURCE" "$HOTPLUG_TARGET"
 fi
 
 echo "[*] Script steps completed successfully."
