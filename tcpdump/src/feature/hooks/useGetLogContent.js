@@ -30,7 +30,7 @@ const useGetLogContent = () => {
         if (query.isSuccess && query.data.isRunning === false) {
             setIsRunning(query.data.isRunning);
         }
-    }, [query.data, query.isSuccess, setIsRunning]);
+    }, [query.data, query.isSuccess, query.dataUpdatedAt, setIsRunning]);
 
     return query
 };
