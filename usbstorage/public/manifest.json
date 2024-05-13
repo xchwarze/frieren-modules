@@ -1,0 +1,29 @@
+{
+  "title": "SD/USB Storage",
+  "name": "usbstorage",
+  "description": "Add SD/USB Storage Support",
+  "icon": "icon.png",
+  "author": {
+    "name": "DSR!",
+    "email": "xcharze@gmail.com"
+  },
+  "keywords": [
+    "storage"
+  ],
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/usbstorage",
+  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
+  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "guestType": [
+    "OpenWrt"
+  ],
+  "dependencies": [
+    "block-mount",
+    "e2fsprogs",
+    "kmod-fs-ext4",
+    "kmod-usb-storage-extras",
+    "fdisk"
+  ],
+  "system": false,
+  "forceSidebar": false,
+  "version": "1.0.0"
+}

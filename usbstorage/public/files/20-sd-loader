@@ -1,0 +1,101 @@
+#!/bin/sh
+# Project: Frieren Framework
+# Copyright (C) 2023 DSR! <xchwarze@gmail.com>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# More info at: https://github.com/xchwarze/frieren
+
+# This script adjusts USB to SD block device mounting in OpenWRT.
+# Hariuha laþu laukar gakar alu ole lule laukar
+
+# Function to log messages to the system log
+log_message() {
+    logger -t hotplug "$1"
+}
+
+# This function checks for swap partitions on the newly connected device and enables them if found.
+handle_swap_add() {
+    if [ "$DEVTYPE" != "disk" ]; then
+        return
+    fi
+
+    local device_path="/dev/${DEVNAME}"
+
+    # Check all partitions on the device for a swap type and activate it.
+    fdisk -l $device_path 2>/dev/null | grep '^/' | while read -r line; do
+        # Extract the partition name
+        local part=$(echo "$line" | awk '{print $1}')
+
+        # Check if the line contains the word 'swap'
+        if echo "$line" | grep -qi 'swap'; then
+            log_message "== Adding swap from $part"
+            swapon $part
+        fi
+    done
+}
+
+# This function checks for active swap partitions on the device being removed and deactivates them.
+handle_swap_remove() {
+    if [ "$DEVTYPE" != "disk" ]; then
+        return
+    fi
+
+    local device_path="/dev/${DEVNAME}"
+
+    # Check all active swap partitions and deactivate those on the device.
+    swapon -s | while read -r line; do
+        local part=$(echo "$line" | awk '{print $1}')
+
+        # Use case statement to check if the partition path starts with the device path
+        case $part in
+            $device_path*)
+                log_message "== Removing swap from $part"
+                swapoff $part
+                ;;
+        esac
+    done
+}
+
+# Function to set up symbolic links and other settings after mounting
+setup_links() {
+    if [ "$DEVTYPE" != "partition" ]; then
+        return
+    fi
+
+    local target="/sd"
+
+    # Check if the specific block is mounted at /sd
+    if mount | grep -qw "$target"; then
+        log_message "== Configuring $DEVNAME at $target"
+
+        # Link the /etc directory if it is not already linked
+        if [ ! -e "$target/etc" ]; then
+            ln -s /etc/ $target/etc
+            log_message "== Linked /etc to $target/etc"
+        fi
+
+        # Link system modules if available
+        if [ -d "$target/modules" ]; then
+            log_message "== Linking modules from $target/modules"
+            for module in $target/modules/*; do
+                module_name=$(basename "$module")
+                if [ ! -l "/usr/share/frieren/modules/$module_name" ]; then
+                    ln -s "$module" "/usr/share/frieren/modules/$module_name"
+                fi
+            done
+        fi
+    fi
+}
+
+# Process hotplug events
+log_message "Act $ACTION for $DEVNAME"
+case "$ACTION" in
+    add)
+        # Execute configuration only if the device mounts automatically
+        handle_swap_add
+        setup_links
+        ;;
+    remove)
+        # Handle the removal of the partition
+        handle_swap_remove
+        ;;
+esac
