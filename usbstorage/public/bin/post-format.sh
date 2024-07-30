@@ -39,13 +39,12 @@ if uci show fstab | grep -q 'fstab.@swap'; then
 fi
 
 uci commit fstab
+sleep 4
 
 # Perform block mount to apply any fstab configuration immediately
 echo "[+] Mounting block devices..."
-sleep 3
 block mount
-
-sleep 2
+sleep 4
 
 # Link the /etc directory if it is not already linked
 if [ ! -e "/sd/etc" ]; then
