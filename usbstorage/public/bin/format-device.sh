@@ -13,6 +13,9 @@ steps() {
     MOUNT_POINT=$2
 
     # Ensure the SD card is not in use
+    # maybe I need to add a "reset"script here like:
+    # echo '$DEVICE' > /sys/bus/usb/drivers/usb/unbind > /dev/null 2>&1
+    # echo '$DEVICE' > /sys/bus/usb/drivers/usb/bind > /dev/null 2>&1
     if mount | grep -q " ${MOUNT_POINT} "; then
         echo "[+] Unmount the SD card..."
         
@@ -22,7 +25,7 @@ steps() {
             swapoff ${DEVICE_PATH}*
         fi
         
-        sleep 4
+        sleep 5
     fi
 
     echo "[+] Apply fdisk options"
@@ -42,7 +45,7 @@ steps() {
     #     -> Last sector (Accept default: remainder of the disk)
     # w   -> Write changes
     echo -e "o\nn\np\n1\n\n+1G\nt\n82\nn\np\n2\n\n\nw\n" | fdisk ${DEVICE_PATH}
-    sleep 2
+    sleep 4
 
     # Determine new partition names
     PARTITIONS=$(fdisk -l ${DEVICE_PATH} | awk '/^\/dev/ {print $1}')
@@ -51,7 +54,8 @@ steps() {
 
     echo "[+] Formatting and setting up partitions..."
     mkswap $SWAP_PART
-    mkfs.ext4 -F $FS_PART    
+    mkfs.ext4 -F $FS_PART
+    sleep 3
 
     echo "[+] Mounting and activating swap..."
     mount $FS_PART ${MOUNT_POINT}
