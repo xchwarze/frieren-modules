@@ -1,0 +1,26 @@
+{
+  "title": "nmap",
+  "name": "nmap",
+  "description": "Perform nmap scans on a client!",
+  "icon": "icon.png",
+  "author": {
+    "name": "m5kro",
+    "email": "m5kro@proton.me"
+  },
+  "keywords": [
+    "nmap"
+  ],
+  "repository": "https://github.com/m5kro/frieren-module-nmap",
+  "bugs": "https://github.com/m5kro/frieren-module-nmap/issues",
+  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "guestType": [
+    "OpenWrt",
+    "RaspberryPi"
+  ],
+  "dependencies": [
+    "nmap"
+  ],
+  "system": false,
+  "forceSidebar": false,
+  "version": "1.0.0"
+}
