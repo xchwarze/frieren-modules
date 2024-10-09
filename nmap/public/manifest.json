@@ -10,12 +10,11 @@
   "keywords": [
     "nmap"
   ],
-  "repository": "https://github.com/m5kro/frieren-module-nmap",
-  "bugs": "https://github.com/m5kro/frieren-module-nmap/issues",
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/nmap",
+  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
   "homepage": "https://github.com/xchwarze/frieren-modules",
   "guestType": [
-    "OpenWrt",
-    "RaspberryPi"
+    "OpenWrt"
   ],
   "dependencies": [
     "nmap"

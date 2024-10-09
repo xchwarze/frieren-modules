@@ -35,8 +35,9 @@ const useStartScan = () => {
         onSuccess: () => {
             setIsRunning(true);
         },
-        onError: () => {
+        onError: (error) => {
             setIsRunning(false);
+            handleError(error);
         },
     });
 };

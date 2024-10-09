@@ -18,8 +18,6 @@
 
 namespace frieren\modules\nmap;
 
-use frieren\helper\OpenWrtHelper;
-
 class NmapController extends \frieren\core\Controller
 {
     private $nmapDirectory = '/root/.nmap';
@@ -49,7 +47,7 @@ class NmapController extends \frieren\core\Controller
         $command = escapeshellcmd($this->request['command']);
 
         // Run Nmap asynchronously and write output to /root/.nmap/ and /tmp/nmap.log
-        OpenWrtHelper::execBackground("nmap {$command} -oN {$logFilePath}", "{$this->logPath} 2>&1");
+        self::setupCoreHelper()::execBackground("nmap {$command} -oN {$logFilePath}", "{$this->logPath} 2>&1");
 
         return self::setSuccess([
             'outputFile' => $filename
@@ -58,9 +56,9 @@ class NmapController extends \frieren\core\Controller
 
     public function stopScan()
     {
-        OpenWrtHelper::exec('killall -9 nmap');
+        self::setupCoreHelper()::exec('killall -9 nmap');
         return self::setSuccess([
-            'success' => !OpenWrtHelper::checkRunning('nmap')
+            'success' => !self::setupCoreHelper()::checkRunning('nmap')
         ]);
     }
 
@@ -102,7 +100,7 @@ class NmapController extends \frieren\core\Controller
         }
 
         return self::setSuccess([
-            'isRunning' => OpenWrtHelper::checkRunning('nmap'),
+            'isRunning' => self::setupCoreHelper()::checkRunning('nmap'),
             'logContent' => file_get_contents($this->logPath)
         ]);
     }

@@ -32,9 +32,6 @@ const useDeleteHistory = () => {
             queryClient.invalidateQueries([NMAP_GET_HISTORY]);
             console.log(`File ${filename} deleted successfully.`);
         },
-        onError: (error) => {
-            console.error(`Error deleting file ${filename}:`, error);
-        },
     });
 };
 
