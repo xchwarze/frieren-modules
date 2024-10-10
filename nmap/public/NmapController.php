@@ -125,7 +125,7 @@ class NmapController extends \frieren\core\Controller
         }
 
         return self::setSuccess([
-            'isRunning' => false,
+            'isRunning' => self::setupCoreHelper()::checkRunning('nmap'),
         ]);
     }
 }
