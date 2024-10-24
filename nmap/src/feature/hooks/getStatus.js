@@ -16,7 +16,7 @@
 
 import useAuthenticatedQuery from '@src/hooks/useAuthenticatedQuery.js';
 import { fetchPost } from '@common/services/fetchService.js';
-import { NMAP_GET_STATUS, NMAP_CHECK_MODULE_DEPENDENCIES } from '@module/feature/helpers/queryKeys.js';
+import { NMAP_GET_STATUS } from '@module/feature/helpers/queryKeys.js';
 import isRunningAtom from '@module/feature/atoms/isRunningAtom.js';
 import { useSetAtom } from 'jotai';
 
@@ -24,32 +24,26 @@ const useGetStatus = () => {
     const setIsRunning = useSetAtom(isRunningAtom);
 
     return useAuthenticatedQuery({
-        queryKey: [NMAP_GET_STATUS, NMAP_CHECK_MODULE_DEPENDENCIES],
-        queryFn: async () => {
-            // Fetch both module status and dependencies concurrently
-            const [moduleStatusResponse, checkDependenciesResponse] = await Promise.all([
-                fetchPost({
-                    module: 'nmap',
-                    action: 'moduleStatus',
-                }),
-                fetchPost({
-                    module: 'nmap',
-                    action: 'checkModuleDependencies',
-                }),
-            ]);
-
-            return {
-                hasDependencies: checkDependenciesResponse.hasDependencies,
-                message: checkDependenciesResponse.message || 'No message',  // Fallback message
-                internalAvailable: checkDependenciesResponse.internalAvailable,
-                SDAvailable: checkDependenciesResponse.SDAvailable,
-                isRunning: moduleStatusResponse.nmap_running,
-            };
-        },
+        queryKey: [NMAP_GET_STATUS],
+        queryFn: () => fetchPost({
+            module: 'nmap',
+            action: 'moduleStatus',
+        }),
         onSuccess: (data) => {
             setIsRunning(data.isRunning);
+        },
+        onError: (error) => {
+            console.error('Error fetching module status:', error);
+            return {
+                hasDependencies: false,
+                message: 'Error fetching status',
+                internalAvailable: false,
+                SDAvailable: false,
+                isRunning: false,
+            };
         },
     });
 };
 
 export default useGetStatus;
+

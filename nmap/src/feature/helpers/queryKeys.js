@@ -18,4 +18,3 @@ export const NMAP_GET_STATUS = 'nmap-get-status';
 export const NMAP_GET_LOG = 'nmap-get-log';
 export const NMAP_GET_HISTORY = 'nmap-get-history';
 export const NMAP_GET_HISTORY_CONTENT = 'nmap-get-history-content';
-export const NMAP_CHECK_MODULE_DEPENDENCIES = 'nmap-check-module-dependencies';

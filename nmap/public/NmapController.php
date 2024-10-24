@@ -24,7 +24,7 @@ class NmapController extends \frieren\core\Controller
     private $logPath = '/tmp/nmap.log';
 
     protected $endpointRoutes = [
-        'checkModuleDependencies',
+        //'checkModuleDependencies',
         'installModuleDependencies',
         'getDependencyInstallationStatus',
         'startScan',
@@ -117,6 +117,7 @@ class NmapController extends \frieren\core\Controller
         return self::setError('File does not exist.');
     }
 
+
     public function moduleStatus()
     {
         // Ensure the Nmap directory exists
@@ -126,6 +127,11 @@ class NmapController extends \frieren\core\Controller
 
         return self::setSuccess([
             'isRunning' => self::setupCoreHelper()::checkRunning('nmap'),
+            'hasDependencies' => !is_string(self::setupCoreHelper()::checkDependency(['nmap'])),
+            'message' => self::setupCoreHelper()::checkDependency(['nmap']),
+            'internalAvailable' => (disk_free_space('/') > self::MIN_DISK_SPACE) && \DeviceConfig::MODULE_USE_INTERNAL_STORAGE,
+            'SDAvailable' => self::setupCoreHelper()::isSDAvailable() && \DeviceConfig::MODULE_USE_USB_STORAGE,
         ]);
     }
+
 }
