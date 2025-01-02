@@ -29,6 +29,7 @@ if [ ! -d "/sd" ]; then
 fi
 
 block detect | uci import fstab
+sleep 2
 uci set fstab.@mount[0].target='/sd'
 uci set fstab.@mount[0].options='rw,sync'
 uci set fstab.@mount[0].enabled=1
