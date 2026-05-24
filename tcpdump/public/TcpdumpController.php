@@ -16,17 +16,17 @@ class TcpdumpController extends \frieren\core\Controller
     private $logPath = '/tmp/fm-tcpdump.log';
 
     protected $endpointRoutes = [
-        //'checkModuleDependencies',
-        'installModuleDependencies',
-        'getDependencyInstallationStatus',
-        'startCapture',
-        'stopCapture',
-        'getCaptureHistory',
-        'getCaptureOutput',
-        'getLogContent',
-        'deleteCapture',
-        'deleteAll',
-        'moduleStatus',
+        //'checkModuleDependencies' => true,
+        'installModuleDependencies' => true,
+        'getDependencyInstallationStatus' => true,
+        'startCapture' => true,
+        'stopCapture' => true,
+        'getCaptureHistory' => true,
+        'getCaptureOutput' => true,
+        'getLogContent' => true,
+        'deleteCapture' => true,
+        'deleteAll' => true,
+        'moduleStatus' => true,
     ];
 
     public function startCapture()

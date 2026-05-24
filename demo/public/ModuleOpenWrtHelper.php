@@ -1,8 +1,8 @@
 <?php
 /*
  * Project: Frieren Framework
- * Copyright (C) 2023 DSR! <xchwarze@gmail.com>
- * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 DSR! <xchwarze@gmail.com>
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  * More info at: https://github.com/xchwarze/frieren
  */
 
@@ -24,7 +24,7 @@ class ModuleOpenWrtHelper
      */
     public static function getUbusSystemInfo()
     {
-        $resume = \frieren\helper\OpenWrtHelper::execUbusCall('system info');
+        $resume = \frieren\helper\OpenWrtHelper::execUbusCall('system', 'info');
         if (!$resume) {
             return false;
         }

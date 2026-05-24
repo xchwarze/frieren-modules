@@ -11,13 +11,13 @@ namespace frieren\modules\wpaonlinecrack;
 class WpaonlinecrackController extends \frieren\core\Controller
 {
     protected $endpointRoutes = [
-        'checkModuleDependencies',
-        'installModuleDependencies',
-        'getDependencyInstallationStatus',
-        'getSettings',
-        'setSettings',
-        'getCapFiles',
-        'sendCap',
+        'checkModuleDependencies' => true,
+        'installModuleDependencies' => true,
+        'getDependencyInstallationStatus' => true,
+        'getSettings' => true,
+        'setSettings' => true,
+        'getCapFiles' => true,
+        'sendCap' => true,
     ];
 
     public function getSettings()

@@ -13,11 +13,11 @@ class DnsspoofController extends \frieren\core\Controller
     private $hostFilePath = '/etc/hosts';
 
     public $endpointRoutes = [
-        'createHostSnapshot',
-        'rollbackHostsFromSnapshot',
-        'fetchHosts',
-        'addHost',
-        'restartService',
+        'createHostSnapshot' => true,
+        'rollbackHostsFromSnapshot' => true,
+        'fetchHosts' => true,
+        'addHost' => true,
+        'restartService' => true,
     ];
 
     private function getHostsSnapshotPath()

@@ -15,15 +15,15 @@ class UsbstorageController extends \frieren\core\Controller
 
     protected $endpointRoutes = [
         // dependency control apis
-        'checkModuleDependencies',
-        'installModuleDependencies',
-        'getDependencyInstallationStatus',
+        'checkModuleDependencies' => true,
+        'installModuleDependencies' => true,
+        'getDependencyInstallationStatus' => true,
 
         // other apis
-        'startAutoSetup',
-        'getAutoSetupStatus',
-        'getFstabConfig',
-        'saveFstabConfig',
+        'startAutoSetup' => true,
+        'getAutoSetupStatus' => true,
+        'getFstabConfig' => true,
+        'saveFstabConfig' => true,
     ];
 
     public function startAutoSetup()

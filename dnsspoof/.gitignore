@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.yarn
 dist
 dist-ssr
 *.local
@@ -23,4 +24,4 @@ dist-ssr
 *.sln
 *.sw?
 
-.env
+/.env

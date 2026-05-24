@@ -24,16 +24,16 @@ class NmapController extends \frieren\core\Controller
     private $logPath = '/tmp/nmap.log';
 
     protected $endpointRoutes = [
-        //'checkModuleDependencies',
-        'installModuleDependencies',
-        'getDependencyInstallationStatus',
-        'startScan',
-        'stopScan',
-        'getHistory',
-        'getHistoryContent',
-        'getLogContent',
-        'deleteHistory',
-        'moduleStatus',
+        //'checkModuleDependencies' => true,
+        'installModuleDependencies' => true,
+        'getDependencyInstallationStatus' => true,
+        'startScan' => true,
+        'stopScan' => true,
+        'getHistory' => true,
+        'getHistoryContent' => true,
+        'getLogContent' => true,
+        'deleteHistory' => true,
+        'moduleStatus' => true,
     ];
 
     public function startScan()
