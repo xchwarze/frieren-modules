@@ -24,6 +24,7 @@ const EXTERNAL_DEPS = [
   'react-dom',
   'react/jsx-runtime',
   'react-bootstrap',
+  'react-content-loader',
   'react-hook-form',
   'react-toastify',
   'wouter',
@@ -31,20 +32,21 @@ const EXTERNAL_DEPS = [
 ];
 
 const GLOBALS_MAP = {
-  '@hookform/resolvers': 'HookformResolvers',
-  '@hookform/resolvers/yup': 'HookformResolversYup',
-  '@tanstack/react-query': 'ReactQuery',
-  'jotai': 'Jotai',
-  'jotai/utils': 'JotaiUtils',
-  'prop-types': 'PropTypes',
-  'react': 'React',
-  'react-dom': 'ReactDOM',
-  'react/jsx-runtime': 'jsxRuntime',
-  'react-bootstrap': 'ReactBootstrap',
-  'react-hook-form': 'ReactHookForm',
-  'react-toastify': 'ReactToastify',
-  'wouter': 'Wouter',
-  'yup': 'Yup'
+  '@hookform/resolvers': 'Frieren.HookformResolvers',
+  '@hookform/resolvers/yup': 'Frieren.HookformResolversYup',
+  '@tanstack/react-query': 'Frieren.ReactQuery',
+  'jotai': 'Frieren.Jotai',
+  'jotai/utils': 'Frieren.JotaiUtils',
+  'prop-types': 'Frieren.PropTypes',
+  'react': 'Frieren.React',
+  'react-dom': 'Frieren.ReactDOM',
+  'react/jsx-runtime': 'Frieren.jsxRuntime',
+  'react-bootstrap': 'Frieren.ReactBootstrap',
+  'react-content-loader': 'Frieren.ReactContentLoader',
+  'react-hook-form': 'Frieren.ReactHookForm',
+  'react-toastify': 'Frieren.ReactToastify',
+  'wouter': 'Frieren.Wouter',
+  'yup': 'Frieren.Yup'
 };
 
 /**
@@ -81,12 +83,13 @@ const resolveGlobal = (id) => {
   }
 
   if (id.startsWith('react-bootstrap/')) {
-    return `ReactBootstrap.${id.replace('react-bootstrap/', '')}`;
+    return `Frieren.ReactBootstrap.${id.replace('react-bootstrap/', '')}`;
   }
 };
 
 export default defineConfig(({ mode }) => {
-  const resolvedMode = mode === 'production' ? 'prod' : mode;
+  const modeMap = { production: 'prod', development: 'dev' };
+  const resolvedMode = modeMap[mode] || mode;
   const env = Object.assign(
       process.env,
       loadEnv(resolvedMode, `${process.cwd()}/config`)

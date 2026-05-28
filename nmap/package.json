@@ -1,6 +1,6 @@
 {
   "name": "nmap",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Perform nmap scans on a client!",
   "license": "LGPL-3.0-only",
   "type": "module",
