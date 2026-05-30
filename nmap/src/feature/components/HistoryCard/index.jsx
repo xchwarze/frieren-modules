@@ -14,7 +14,7 @@
  * Modifications: Modified functions to work with Nmap module log format and properly read logs.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Table from 'react-bootstrap/Table';
 import PanelCard from '@src/components/PanelCard';
 import Button from '@src/components/Button';
