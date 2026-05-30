@@ -21,7 +21,6 @@ const CaptureHistory = () => {
     const { data, isSuccess } = query;
 
     const handleDownloadClick = (item) => {
-        console.log({item})
         downloadCapture({
             outputFile: item,
         });
