@@ -14,9 +14,10 @@
  * Modifications: Modified functions to work with Nmap module log format and properly read logs.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Table from 'react-bootstrap/Table';
 import PanelCard from '@src/components/PanelCard';
+import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import Button from '@src/components/Button';
 import useGetHistory from '@module/feature/hooks/getHistory.js';
 import useDeleteHistory from '@module/feature/hooks/deleteHistory.js';
@@ -43,7 +44,7 @@ const HistoryCard = () => {
 
     return (
         <PanelCard title={'History'} query={query}>
-            {isSuccess && (
+            {isSuccess ? (
                 <>
                     <Table striped hover responsive>
                         <thead>
@@ -93,6 +94,12 @@ const HistoryCard = () => {
                         </div>
                     )}
                 </>
+            ) : (
+                <SkeletonTable
+                    headers={['Scan File', 'Actions']}
+                    widths={[200, 120]}
+                    rows={3}
+                />
             )}
         </PanelCard>
     );

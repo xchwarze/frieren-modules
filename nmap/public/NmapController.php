@@ -78,7 +78,7 @@ class NmapController extends \frieren\core\Controller
             return self::setError('No filename provided');
         }
 
-        $filename = $this->request['filename'];
+        $filename = basename($this->request['filename']);
         $filePath = "{$this->nmapDirectory}/{$filename}";
 
         if (!file_exists($filePath)) {
@@ -107,7 +107,11 @@ class NmapController extends \frieren\core\Controller
 
     public function deleteHistory()
     {
-        $filename = $this->request['filename'];
+        if (!isset($this->request['filename'])) {
+            return self::setError('No filename provided');
+        }
+
+        $filename = basename($this->request['filename']);
         $filePath = "{$this->nmapDirectory}/{$filename}";
         if (file_exists($filePath)) {
             unlink($filePath);

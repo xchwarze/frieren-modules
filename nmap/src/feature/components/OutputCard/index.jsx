@@ -1,60 +1,54 @@
 /*
- * Project: Frieren Nmap Module
- * Based on Frieren Framework Template Module and other Frieren modules
- * Original Copyright (C) 2023 DSR! <xchwarze@gmail.com>
- * Modifications and new code by m5kro <m5kro@proton.me>, 2024
- *
+ * Project: Frieren Framework
+ * Copyright (C) 2023 DSR! <xchwarze@gmail.com>
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
- *
- * Original code from Frieren Framework is distributed under the terms of the
- * GNU Lesser General Public License (LGPL) version 3 or later. You should have received
- * a copy of the LGPL-3.0-or-later along with this project. If not, see <https://www.gnu.org/licenses>.
- * 
- * Modifications: Modified functions to read Nmap logs.
  */
-
 import { useEffect, useRef } from 'react';
 import Form from 'react-bootstrap/Form';
 
 import PanelCard from '@src/components/PanelCard';
+import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useGetLog from '@module/feature/hooks/getLog.js';
 
-const LogOutput = () => {
+const OutputCard = () => {
     const query = useGetLog();
-    const logRef = useRef(null);
+    const { isSuccess } = query;
+    const { logContent } = query?.data ?? {};
+    const resume = logContent ?? 'No scan output to display.';
 
-    // Scroll to bottom when log is updated
+    const textareaRef = useRef(null);
     useEffect(() => {
-        if (logRef.current) {
-            logRef.current.scrollTop = logRef.current.scrollHeight;
+        if (textareaRef.current) {
+            textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
         }
-    }, [query.data]);
-
-    let logContent = 'No log available';
-    
-    if (query.data?.logContent) {
-            logContent = query.data.logContent;
-    }
+    }, [resume]);
 
     return (
-        <PanelCard 
-                title="Nmap Scan Log"
-                query={query}
+        <PanelCard
+            title={'Output'}
+            query={query}
+            className={'mt-3'}
         >
-            <Form.Group>
-                <Form.Label>Log Output</Form.Label>
-                <Form.Control
-                    as="textarea"
+            {isSuccess ? (
+                <Form.Group>
+                    <Form.Control
+                        ref={textareaRef}
+                        as={'textarea'}
+                        rows={10}
+                        readOnly={true}
+                        value={resume}
+                        className={'text-muted'}
+                    />
+                </Form.Group>
+            ) : (
+                <SkeletonTable
+                    widths={[600]}
                     rows={10}
-                    readOnly
-                    value={query.isLoading ? 'Loading log...' : query.isError ? 'Error loading log' : logContent}
-                    ref={logRef}
-                    style={{ whiteSpace: 'pre-wrap', overflowY: 'auto' }}
                 />
-            </Form.Group>
+            )}
         </PanelCard>
     );
 };
 
-export default LogOutput;
+export default OutputCard;

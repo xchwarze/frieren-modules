@@ -50,6 +50,10 @@ const OptionsCard = ({ statusQuery }) => {
         serviceVersion: false,
         traceroute: false,
         timing: '',
+        scanType: '',
+        topPorts: '',
+        script: '',
+        customOptions: '',
     };
 
     return (
@@ -63,6 +67,23 @@ const OptionsCard = ({ statusQuery }) => {
                         <p className={'fw-bold fs-5 mb-3'}>Basic Options</p>
                         <CommandInput label={'Command'} placeholder={'Enter Nmap command'} />
                         <InputField name={'target'} label={'Target'} placeholder={'Enter target'} />
+                        <SelectField
+                            name={'scanType'}
+                            label={'Scan Type (-s value)'}
+                            options={[
+                                { value: '', label: 'Default' },
+                                { value: 'S', label: '-sS (TCP SYN)' },
+                                { value: 'T', label: '-sT (TCP Connect)' },
+                                { value: 'U', label: '-sU (UDP)' },
+                                { value: 'A', label: '-sA (TCP ACK)' },
+                                { value: 'W', label: '-sW (TCP Window)' },
+                                { value: 'M', label: '-sM (TCP Maimon)' },
+                                { value: 'N', label: '-sN (TCP Null)' },
+                                { value: 'F', label: '-sF (TCP FIN)' },
+                                { value: 'X', label: '-sX (TCP Xmas)' },
+                                { value: 'n', label: '-sn (Ping scan, no ports)' },
+                            ]}
+                        />
                         <SelectField
                             name={'timing'}
                             label={'Timing (-T value)'}
@@ -84,6 +105,9 @@ const OptionsCard = ({ statusQuery }) => {
                         <SwitchField name={'osDetection'} label={'OS Detection'} />
                         <SwitchField name={'serviceVersion'} label={'Service Version'} />
                         <SwitchField name={'traceroute'} label={'Traceroute'} />
+                        <InputField name={'topPorts'} label={'Top Ports (--top-ports)'} placeholder={'e.g. 100'} />
+                        <InputField name={'script'} label={'Script (--script=)'} placeholder={'e.g. vuln, default'} />
+                        <InputField name={'customOptions'} label={'Custom Options'} placeholder={'Extra nmap flags'} />
                     </Col>
                 </Row>
 
