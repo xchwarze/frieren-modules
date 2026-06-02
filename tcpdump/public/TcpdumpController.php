@@ -35,6 +35,11 @@ class TcpdumpController extends \frieren\core\Controller
             return self::setError('No command provided');
         }
 
+        // block tcpdump -z (postrotate command) — would allow arbitrary command execution
+        if (preg_match('/(^|\s)-z(\s|=|$)/', $this->request['command'])) {
+            return self::setError('The -z postrotate option is not allowed');
+        }
+
         $filename = date('Y-m-d\TH-i-s') . '.pcap';
         $pcapFilePath = "{$this->pcapDirectory}/{$filename}";
         $command = escapeshellcmd($this->request['command']);
@@ -48,7 +53,8 @@ class TcpdumpController extends \frieren\core\Controller
     public function stopCapture()
     {
         OpenWrtHelper::exec('killall -9 tcpdump');
-        self::setSuccess([
+
+        return self::setSuccess([
             'success' => OpenWrtHelper::checkRunning('tcpdump')
         ]);
     }
@@ -67,11 +73,19 @@ class TcpdumpController extends \frieren\core\Controller
     {
         $captureName = $this->request['outputFile'] ?? false;
         if (empty($captureName)) {
-            // grab last saved capture
-            $folder = scandir($this->pcapDirectory, SCANDIR_SORT_DESCENDING);
-            $captureName = $folder[2] ?? null;
+            // grab last saved capture (skip . and .. — only real files)
+            $folder = array_values(array_filter(
+                scandir($this->pcapDirectory, SCANDIR_SORT_DESCENDING),
+                fn($file) => is_file("{$this->pcapDirectory}/{$file}")
+            ));
+            $captureName = $folder[0] ?? null;
+            if ($captureName === null) {
+                return self::setError('No capture output available');
+            }
         }
 
+        // prevent path traversal via outputFile param
+        $captureName = basename($captureName);
         $filePath = "{$this->pcapDirectory}/{$captureName}";
         if (!file_exists($filePath)) {
             return self::setError("Could not find capture output: {$filePath}");
@@ -94,7 +108,13 @@ class TcpdumpController extends \frieren\core\Controller
 
     public function deleteCapture()
     {
-        $filename = $this->request['filename'];
+        $filename = $this->request['filename'] ?? '';
+        if (empty($filename)) {
+            return self::setError('No filename provided');
+        }
+
+        // prevent path traversal via filename param
+        $filename = basename($filename);
         $filePath = "{$this->pcapDirectory}/{$filename}";
         if (file_exists($filePath)) {
             unlink($filePath);
@@ -131,7 +151,7 @@ class TcpdumpController extends \frieren\core\Controller
     {
         // fix default folder
         if (!file_exists($this->pcapDirectory)) {
-            mkdir($this->pcapDirectory, 0777, true);
+            mkdir($this->pcapDirectory, 0755, true);
         }
 
         // this dependency can be installed by two different packages, so I simplify the default checkModuleDependencies() check

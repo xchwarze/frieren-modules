@@ -7,6 +7,7 @@
 import Table from 'react-bootstrap/Table';
 
 import PanelCard from '@src/components/PanelCard';
+import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import Button from '@src/components/Button';
 import useGetCaptureHistory from '@module/feature/hooks/useGetCaptureHistory.js';
 import useDeleteCapture from '@module/feature/hooks/useDeleteCapture.js';
@@ -21,7 +22,6 @@ const CaptureHistory = () => {
     const { data, isSuccess } = query;
 
     const handleDownloadClick = (item) => {
-        console.log({item})
         downloadCapture({
             outputFile: item,
         });
@@ -38,7 +38,7 @@ const CaptureHistory = () => {
             title={'History'}
             query={query}
         >
-            {isSuccess && (
+            {isSuccess ? (
                 <>
                     <Table striped hover responsive>
                         <thead>
@@ -87,6 +87,12 @@ const CaptureHistory = () => {
                         />
                     </div>
                 </>
+            ) : (
+                <SkeletonTable
+                    headers={['Capture File', 'Actions']}
+                    widths={[220, 180]}
+                    rows={3}
+                />
             )}
         </PanelCard>
     );
