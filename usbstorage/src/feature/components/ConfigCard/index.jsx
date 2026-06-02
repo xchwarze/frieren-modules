@@ -11,6 +11,7 @@ import PanelCard from '@src/components/PanelCard';
 import FormProvider from '@src/components/Form/FormProvider';
 import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
+import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useGetFstabConfig from '@module/feature/hooks/useGetFstabConfig.js';
 import useSaveFstabConfig from '@module/feature/hooks/useSaveFstabConfig.js';
 
@@ -20,6 +21,7 @@ const fstabConfigSchema = yup.object({
 
 const ConfigCard = () => {
     const query = useGetFstabConfig();
+    const { isSuccess } = query;
     const { mutateAsync: saveFstabConfig } = useSaveFstabConfig();
     const textareaRef = useRef(null);
 
@@ -41,15 +43,19 @@ const ConfigCard = () => {
                 'This interface allows you to view and update the filesystem table configuration, ensuring proper device and partition mounting on system startup.'}
             query={query}
         >
-            <FormProvider schema={fstabConfigSchema} defaultValues={defaultValues} onSubmit={saveFstabConfig}>
-                <TextAreaField
-                    ref={textareaRef}
-                    name={'config'}
-                    label={'FSTAB Content'}
-                    rows={20}
-                />
-                <SubmitButton />
-            </FormProvider>
+            {isSuccess ? (
+                <FormProvider schema={fstabConfigSchema} defaultValues={defaultValues} onSubmit={saveFstabConfig}>
+                    <TextAreaField
+                        ref={textareaRef}
+                        name={'config'}
+                        label={'FSTAB Content'}
+                        rows={20}
+                    />
+                    <SubmitButton />
+                </FormProvider>
+            ) : (
+                <SkeletonTable widths={[500]} rows={8} />
+            )}
         </PanelCard>
     );
 };

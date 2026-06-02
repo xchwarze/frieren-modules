@@ -1,6 +1,6 @@
 {
   "name": "usbstorage",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Add SD/USB Storage Support",
   "license": "LGPL-3.0-only",
   "type": "module",
