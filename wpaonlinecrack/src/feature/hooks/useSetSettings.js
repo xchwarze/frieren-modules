@@ -5,6 +5,7 @@
  * More info at: https://github.com/xchwarze/frieren
  */
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 
 import useAuthenticatedMutation from '@src/hooks/useAuthenticatedMutation.js';
 import { fetchPost } from '@src/services/fetchService.js';
@@ -21,6 +22,7 @@ const useSetSettings = () => {
             'onlinehashcrackEmail': onlinehashcrackEmail,
         }),
         onSuccess: async () => {
+            toast.success('Settings saved successfully');
             queryClient.invalidateQueries({
                 queryKey: [WPA_ONLINE_CRACK_GET_SETTINGS],
             });

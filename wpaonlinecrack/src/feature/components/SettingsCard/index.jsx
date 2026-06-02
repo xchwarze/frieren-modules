@@ -30,14 +30,14 @@ const SettingsCard = () => {
     return (
         <PanelCard
             title={'Settings'}
-            subtitle={'To use these third party services you must be registered on their respective sites.'}
+            subtitle={<>To use these third party services you must be registered on their respective sites. <a href="https://wpa-sec.stanev.org/?get_key" target="_blank" rel="noopener noreferrer">Get your WPA-Sec API key here</a>.</>}
             query={settingsQuery}
         >
             <FormProvider schema={wpaOnlineCrackSettingsSchema} onSubmit={setSettings} defaultValues={defaultValues}>
                 <InputField
                     name={'wpaSecKey'}
-                    label={'WPASEC Service Key'}
-                    placeholder={'Enter your WPA service key'}
+                    label={'WPA-Sec Service Key'}
+                    placeholder={'Enter your WPA-Sec service key'}
                 />
                 <InputField
                     name={'onlinehashcrackEmail'}

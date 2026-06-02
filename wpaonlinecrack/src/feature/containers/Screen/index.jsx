@@ -13,6 +13,7 @@ import ConditionalTabContent from '@src/components/Tabs/ConditionalTabContent';
 import { WPA_ONLINE_CRACK_CHECK_MODULE_DEPENDENCIES } from '@module/feature/helpers/queryKeys.js';
 import useModuleStatus from '@module/feature/hooks/useCheckModuleDependencies.js';
 import CapturesCard from '@module/feature/components/CapturesCard';
+import ResultsCard from '@module/feature/components/ResultsCard';
 import SettingsCard from '@module/feature/components/SettingsCard';
 
 const Screen = () => {
@@ -36,6 +37,11 @@ const Screen = () => {
                 <Tab eventKey={'captures'} title={<TabTitle title={'Captures'} icon={'file'} />}>
                     <ConditionalTabContent id={'wpaonlinecrack'} eventKey={'captures'}>
                         <CapturesCard />
+                    </ConditionalTabContent>
+                </Tab>
+                <Tab eventKey={'results'} title={<TabTitle title={'Results'} icon={'search'} />}>
+                    <ConditionalTabContent id={'wpaonlinecrack'} eventKey={'results'}>
+                        <ResultsCard />
                     </ConditionalTabContent>
                 </Tab>
                 <Tab eventKey={'settings'} title={<TabTitle title={'Settings'} icon={'settings'} />}>
