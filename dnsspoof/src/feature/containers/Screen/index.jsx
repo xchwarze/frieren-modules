@@ -7,6 +7,7 @@
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
+import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import TextAreaField from '@src/components/Form/TextAreaField';
@@ -19,12 +20,13 @@ import useCreateHostSnapshot from '@module/feature/hooks/useCreateHostSnapshot';
 import useRollbackHostsFromSnapshot from '@module/feature/hooks/useRollbackHostsFromSnapshot';
 
 const dnsSpoofSchema = yup.object({
-    userIP: yup.string().required('IP Address is mandatory'),
-    userDomain: yup.string().required('Domain is mandatory')
+    ip: yup.string().required('IP Address is mandatory'),
+    domain: yup.string().required('Domain is mandatory')
 }).required();
 
 const Screen = () => {
     const query = useFetchHosts();
+    const { isSuccess } = query;
     const { mutateAsync: addHostMutation } = useAddHost();
     const { mutateAsync: restartMutation, isPending: restartPending } = useRestartService();
     const { mutateAsync: snapshotMutation, isPending: snapshotPending } = useCreateHostSnapshot();
@@ -42,48 +44,55 @@ const Screen = () => {
             subtitle={'Manage your DNS spoofing settings.'}
             query={query}
         >
-            <FormProvider schema={dnsSpoofSchema} onSubmit={addHostMutation} defaultValues={defaultValues}>
-                <TextAreaField
-                    name={'hosts'}
-                    label={'Hosts file'}
+            {isSuccess ? (
+                <FormProvider schema={dnsSpoofSchema} onSubmit={addHostMutation} defaultValues={defaultValues}>
+                    <TextAreaField
+                        name={'hosts'}
+                        label={'Hosts file'}
+                        rows={6}
+                        readOnly={true}
+                    />
+                    <InputField
+                        name={'ip'}
+                        label={'IP Address'}
+                        placeholder={'Enter IP address'}
+                    />
+                    <InputField
+                        name={'domain'}
+                        label={'Domain'}
+                        placeholder={'Enter domain'}
+                    />
+                    <SubmitButton label={'Add'} icon={'plus'} />
+                    <Button
+                        label={'Restart Service'}
+                        icon={'refresh-cw'}
+                        onClick={restartMutation}
+                        loading={restartPending}
+                        className={'ms-2'}
+                    />
+                    <Button
+                        label={'Snapshot Hosts'}
+                        icon={'copy'}
+                        variant={'danger'}
+                        onClick={snapshotMutation}
+                        loading={snapshotPending}
+                        className={'ms-2'}
+                    />
+                    <Button
+                        label={'Rollback Hosts'}
+                        icon={'shuffle'}
+                        variant={'danger'}
+                        onClick={rollbackMutation}
+                        loading={rollbackPending}
+                        className={'ms-2'}
+                    />
+                </FormProvider>
+            ) : (
+                <SkeletonTable
+                    widths={[500]}
                     rows={6}
-                    readOnly={true}
                 />
-                <InputField
-                    name={'ip'}
-                    label={'IP Address'}
-                    placeholder={'Enter IP address'}
-                />
-                <InputField
-                    name={'domain'}
-                    label={'Domain'}
-                    placeholder={'Enter domain'}
-                />
-                <SubmitButton label={'Add'} icon={'plus'} />
-                <Button
-                    label={'Restart Service'}
-                    icon={'refresh-cw'}
-                    onClick={restartMutation}
-                    loading={restartPending}
-                    className={'ms-2'}
-                />
-                <Button
-                    label={'Snapshot Hosts'}
-                    icon={'copy'}
-                    variant={'danger'}
-                    onClick={snapshotMutation}
-                    loading={snapshotPending}
-                    className={'ms-2'}
-                />
-                <Button
-                    label={'Rollback Hosts'}
-                    icon={'shuffle'}
-                    variant={'danger'}
-                    onClick={rollbackMutation}
-                    loading={rollbackPending}
-                    className={'ms-2'}
-                />
-            </FormProvider>
+            )}
         </PanelCard>
     );
 };

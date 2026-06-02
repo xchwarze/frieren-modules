@@ -58,8 +58,20 @@ class DnsspoofController extends \frieren\core\Controller
 
     public function addHost()
     {
+        $ip = $this->request['ip'] ?? '';
+        $domain = $this->request['domain'] ?? '';
+
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return self::setError('Invalid IP address.');
+        }
+
+        // RFC 1123 hostname: labels of letters/digits/hyphen, dot-separated, max 253 chars
+        if (!preg_match('/^(?=.{1,253}$)([a-zA-Z0-9](-?[a-zA-Z0-9])*)(\.[a-zA-Z0-9](-?[a-zA-Z0-9])*)+$/', $domain)) {
+            return self::setError('Invalid domain name.');
+        }
+
         $hosts = file_get_contents($this->hostFilePath);
-        $hosts = str_replace("\n\n", "\n" . $this->request['ip'] . " " . $this->request['domain'] . "\n\n", $hosts);
+        $hosts = str_replace("\n\n", "\n" . $ip . " " . $domain . "\n\n", $hosts);
         file_put_contents($this->hostFilePath, $hosts);
 
         return self::setSuccess();
