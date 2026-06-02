@@ -32,6 +32,6 @@ class DemoController extends \frieren\core\Controller
             ]);
         }
 
-        self::setError();
+        return self::setError();
     }
 }
