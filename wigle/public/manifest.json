@@ -1,0 +1,26 @@
+{
+  "title": "WiGLE",
+  "name": "wigle",
+  "description": "WiFi network lookup via WiGLE.net database",
+  "icon": "wifi",
+  "author": {
+    "name": "DSR!",
+    "email": "xchwarze@gmail.com"
+  },
+  "keywords": [
+    "wifi",
+    "recon"
+  ],
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/wigle",
+  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
+  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "guestType": [
+    "OpenWrt"
+  ],
+  "dependencies": [
+    "curl"
+  ],
+  "system": false,
+  "forceSidebar": false,
+  "version": "1.0.0"
+}
