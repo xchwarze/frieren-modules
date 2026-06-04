@@ -1,7 +1,7 @@
 {
   "title": "nmap",
   "name": "nmap",
-  "description": "Perform nmap scans on a client!",
+  "description": "Web GUI for Nmap, the most popular network mapping tool.",
   "icon": "icon.png",
   "author": {
     "name": "m5kro",
