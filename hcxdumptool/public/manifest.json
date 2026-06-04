@@ -1,0 +1,26 @@
+{
+  "title": "hcxdumptool",
+  "name": "hcxdumptool",
+  "description": "WiFi handshake capture using hcxdumptool",
+  "icon": "radio",
+  "author": {
+    "name": "DSR!",
+    "email": "xchwarze@gmail.com"
+  },
+  "keywords": [
+    "wifi",
+    "handshake"
+  ],
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/hcxdumptool",
+  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
+  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "guestType": [
+    "OpenWrt"
+  ],
+  "dependencies": [
+    "hcxdumptool"
+  ],
+  "system": false,
+  "forceSidebar": false,
+  "version": "1.0.0"
+}
