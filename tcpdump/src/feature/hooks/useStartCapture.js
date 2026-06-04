@@ -5,14 +5,17 @@
  * More info at: https://github.com/xchwarze/frieren
  */
 import { useSetAtom } from 'jotai';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { sleep } from '@src/helpers/actionsHelper.js';
 import useAuthenticatedMutation from '@src/hooks/useAuthenticatedMutation.js';
 import { fetchPost } from '@src/services/fetchService.js';
 import isRunningAtom from '@module/feature/atoms/isRunningAtom.js';
+import { TCP_DUMP_GET_CAPTURE_HISTORY } from '@module/feature/helpers/queryKeys.js';
 
 const useStartCapture = () => {
     const setIsRunning = useSetAtom(isRunningAtom);
+    const queryClient = useQueryClient();
 
     return useAuthenticatedMutation({
         mutationFn: ({ command }) => fetchPost({
@@ -23,6 +26,9 @@ const useStartCapture = () => {
         onSuccess: async () => {
             await sleep(600);
             setIsRunning(true);
+            queryClient.invalidateQueries({
+                queryKey: [TCP_DUMP_GET_CAPTURE_HISTORY]
+            });
         },
     });
 };

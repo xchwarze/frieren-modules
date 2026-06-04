@@ -6,6 +6,7 @@
  */
 import useAuthenticatedQuery from '@common/hooks/useAuthenticatedQuery.js';
 import { fetchPost } from '@common/services/fetchService.js';
+import { sleep } from '@common/helpers/actionsHelper.js';
 import { DEMO_GET_SYSTEM_STATS } from '@module/feature/helpers/queryKeys.js';
 
 /**
@@ -16,10 +17,15 @@ import { DEMO_GET_SYSTEM_STATS } from '@module/feature/helpers/queryKeys.js';
 const useSystemStats = () => (
     useAuthenticatedQuery({
         queryKey: [DEMO_GET_SYSTEM_STATS],
-        queryFn: () => fetchPost({
-            module: 'demo',
-            action: 'getSystemStats',
-        }),
+        queryFn: async () => {
+            // Artificial delay so the skeleton stays visible longer (demo only)
+            await sleep(2000);
+
+            return fetchPost({
+                module: 'demo',
+                action: 'getSystemStats',
+            });
+        },
     })
 );
 

@@ -32,6 +32,7 @@ const SystemStatsCard = () => {
         <PanelCard
             title={'System Stats'}
             query={query}
+            isLoading={false}
         >
             <div className={'d-flex justify-content-evenly mt-2'}>
                 {stats.map(({ key, label }) => (

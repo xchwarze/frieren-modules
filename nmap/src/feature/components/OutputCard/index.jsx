@@ -8,12 +8,10 @@ import { useEffect, useRef } from 'react';
 import Form from 'react-bootstrap/Form';
 
 import PanelCard from '@src/components/PanelCard';
-import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useGetLog from '@module/feature/hooks/getLog.js';
 
 const OutputCard = () => {
     const query = useGetLog();
-    const { isSuccess } = query;
     const { logContent } = query?.data ?? {};
     const resume = logContent ?? 'No scan output to display.';
 
@@ -30,23 +28,16 @@ const OutputCard = () => {
             query={query}
             className={'mt-3'}
         >
-            {isSuccess ? (
-                <Form.Group>
-                    <Form.Control
-                        ref={textareaRef}
-                        as={'textarea'}
-                        rows={10}
-                        readOnly={true}
-                        value={resume}
-                        className={'text-muted'}
-                    />
-                </Form.Group>
-            ) : (
-                <SkeletonTable
-                    widths={[600]}
+            <Form.Group>
+                <Form.Control
+                    ref={textareaRef}
+                    as={'textarea'}
                     rows={10}
+                    readOnly={true}
+                    value={resume}
+                    className={'text-muted'}
                 />
-            )}
+            </Form.Group>
         </PanelCard>
     );
 };
