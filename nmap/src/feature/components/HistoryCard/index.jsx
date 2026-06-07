@@ -14,12 +14,17 @@
  * Modifications: Modified functions to work with Nmap module log format and properly read logs.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import PanelCard from '@common/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
 import Button from '@common/components/Button';
+import SearchInput from '@common/components/SearchInput';
+import TablePagination from '@common/components/TablePagination';
+import SkeletonBar from '@src/components/SkeletonBar';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import useDebouncedValue from '@common/hooks/useDebouncedValue.js';
+import usePagination from '@common/hooks/usePagination.js';
 import useGetHistory from '@module/feature/hooks/getHistory.js';
 import useDeleteHistory from '@module/feature/hooks/deleteHistory.js';
 import useGetHistoryContent from '@module/feature/hooks/getHistoryContent.js';
@@ -41,12 +46,27 @@ const HistoryCard = () => {
 
     const files = data?.files || [];
 
+    const [searchTerm, setSearchTerm] = useState('');
+    const debounced = useDebouncedValue(searchTerm);
+    const filtered = useMemo(
+        () => (!debounced
+            ? files
+            : files.filter((f) => (f ?? '').toLowerCase().includes(debounced.toLowerCase()))),
+        [files, debounced]
+    );
+    const { pageData, currentPage, totalPages, setCurrentPage } = usePagination(filtered);
+
     const logContent = fileContentData?.logContent;
 
     return (
         <PanelCard title={'History'} refetch={query.refetch} isFetching={query.isFetching}>
             {isSuccess ? (
                 <>
+                    <SearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder={'Search by filename...'}
+                    />
                     <PanelTable>
                         <thead>
                             <tr>
@@ -55,8 +75,8 @@ const HistoryCard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {files.length > 0 ? (
-                                files.map((item) => (
+                            {filtered.length > 0 ? (
+                                pageData.map((item) => (
                                     <tr key={item}>
                                         <td>{item}</td>
                                         <td>
@@ -85,11 +105,18 @@ const HistoryCard = () => {
                         </tbody>
                     </PanelTable>
 
+                    <TablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        totalItems={filtered.length}
+                    />
+
                     {selectedFile && (
                         <div className={'mt-4'}>
                             <h5>File Content: {selectedFile}</h5>
                             {isLoadingContent ? (
-                                <p>Loading content...</p>
+                                <SkeletonBar width={600} height={120} barHeight={114} />
                             ) : (
                                 <pre>{logContent || 'No content available.'}</pre>
                             )}
