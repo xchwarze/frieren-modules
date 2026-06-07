@@ -8,7 +8,7 @@ import * as yup from 'yup';
 
 import PanelCard from '@common/components/PanelCard';
 import FormActions from '@common/components/FormActions';
-import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SkeletonBar from '@src/components/SkeletonBar';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import TextAreaField from '@src/components/Form/TextAreaField';
@@ -89,10 +89,20 @@ const Screen = () => {
                     </FormActions>
                 </FormProvider>
             ) : (
-                <SkeletonTable
-                    widths={[500]}
-                    rows={6}
-                />
+                <>
+                    <div className={'mb-3'}>
+                        <SkeletonBar width={500} height={132} barHeight={120} />
+                    </div>
+                    <div className={'mb-3'}>
+                        <SkeletonBar width={500} height={38} barHeight={32} />
+                    </div>
+                    <div className={'mb-3'}>
+                        <SkeletonBar width={500} height={38} barHeight={32} />
+                    </div>
+                    <div className={'d-flex justify-content-end gap-2'}>
+                        <SkeletonBar width={320} height={38} barHeight={32} />
+                    </div>
+                </>
             )}
         </PanelCard>
     );
