@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import Table from 'react-bootstrap/Table';
-
 import PanelCard from '@src/components/PanelCard';
+import PanelTable from '@common/components/PanelTable';
+import ActionButtons from '@common/components/ActionButtons';
+import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import Button from '@src/components/Button';
 import useGetCaptureHistory from '@module/feature/hooks/useGetCaptureHistory.js';
@@ -36,11 +37,12 @@ const CaptureHistory = () => {
     return (
         <PanelCard
             title={'History'}
-            query={query}
+            refetch={query.refetch}
+            isFetching={query.isFetching}
         >
             {isSuccess ? (
                 <>
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <thead>
                             <tr>
                                 <th>Capture File</th>
@@ -49,24 +51,25 @@ const CaptureHistory = () => {
                         </thead>
                         <tbody>
                             {data.files.length > 0 ? (
-                                data.files.map((item, index) => (
-                                    <tr key={index}>
+                                data.files.map((item) => (
+                                    <tr key={item}>
                                         <td>{item}</td>
                                         <td>
-                                            <Button
-                                                label={'Download'}
-                                                icon={'download'}
-                                                loading={downloadCaptureRunning}
-                                                onClick={() => handleDownloadClick(item)}
-                                            />
-                                            <Button
-                                                label={'Delete'}
-                                                icon={'trash-2'}
-                                                variant={'danger'}
-                                                loading={deleteHistoryRunning}
-                                                onClick={() => handleDeleteClick(item)}
-                                                className={'ms-2'}
-                                            />
+                                            <ActionButtons>
+                                                <Button
+                                                    label={'Download'}
+                                                    icon={'download'}
+                                                    loading={downloadCaptureRunning}
+                                                    onClick={() => handleDownloadClick(item)}
+                                                />
+                                                <Button
+                                                    label={'Delete'}
+                                                    icon={'trash-2'}
+                                                    variant={'danger'}
+                                                    loading={deleteHistoryRunning}
+                                                    onClick={() => handleDeleteClick(item)}
+                                                />
+                                            </ActionButtons>
                                         </td>
                                     </tr>
                                 ))
@@ -76,8 +79,8 @@ const CaptureHistory = () => {
                                 </tr>
                             )}
                         </tbody>
-                    </Table>
-                    <div className={'d-flex justify-content-end gap-2'}>
+                    </PanelTable>
+                    <FormActions>
                         <Button
                             label={'Delete History'}
                             icon={'trash-2'}
@@ -85,7 +88,7 @@ const CaptureHistory = () => {
                             loading={deleteAllRunning}
                             onClick={deleteAll}
                         />
-                    </div>
+                    </FormActions>
                 </>
             ) : (
                 <SkeletonTable

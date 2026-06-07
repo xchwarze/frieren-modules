@@ -10,6 +10,7 @@ import DependenciesAlert from '@src/components/DependenciesAlert';
 import PanelTabs from '@src/components/Tabs/PanelTabs';
 import TabTitle from '@src/components/Tabs/TabTitle';
 import ConditionalTabContent from '@src/components/Tabs/ConditionalTabContent';
+import PanelStack from '@common/components/PanelCard/PanelStack';
 import { TCP_DUMP_GET_MODULE_STATUS } from '@module/feature/helpers/queryKeys.js';
 import useModuleStatus from '@module/feature/hooks/useModuleStatus.js';
 import SettingsCard from '@module/feature/components/SettingsCard';
@@ -36,8 +37,10 @@ const Screen = () => {
             <PanelTabs id={'tcpdump'} defaultTab={'capture'}>
                 <Tab eventKey={'capture'} title={<TabTitle title={'Capture'} icon={'eye'} />}>
                     <ConditionalTabContent id={'tcpdump'} eventKey={'capture'}>
-                        <SettingsCard statusQuery={statusQuery} />
-                        <OutputCard />
+                        <PanelStack>
+                            <SettingsCard statusQuery={statusQuery} />
+                            <OutputCard />
+                        </PanelStack>
                     </ConditionalTabContent>
                 </Tab>
                 <Tab eventKey={'history'} title={<TabTitle title={'History'} icon={'file-text'} />}>

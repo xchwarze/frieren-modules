@@ -11,6 +11,7 @@ import * as yup from 'yup';
 import PropTypes from 'prop-types';
 
 import PanelCard from '@src/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import Button from '@src/components/Button';
 import FormProvider from '@src/components/Form/FormProvider';
 import SelectField from '@src/components/Form/SelectField';
@@ -62,11 +63,12 @@ const SettingsCard = ({ statusQuery }) => {
     return (
         <PanelCard
             title={'Capture Settings'}
-            query={statusQuery}
+            refetch={statusQuery.refetch}
+            isFetching={statusQuery.isFetching}
         >
             <FormProvider schema={tcpDumpSettingsSchema} onSubmit={startCapture} defaultValues={defaultValues}>
                 <Row className={'g-4'}>
-                    <Col md={4} className={'mt-4'}>
+                    <Col md={4}>
                         <p className={'fw-bold fs-5 mb-3'}>Basic Options</p>
                         <CommandInput
                             label={'Command'}
@@ -134,7 +136,7 @@ const SettingsCard = ({ statusQuery }) => {
                         />
                     </Col>
 
-                    <Col md={4} className={'mt-4'}>
+                    <Col md={4}>
                         <p className={'fw-bold fs-5 mb-3'}>Filters</p>
                         <FilterInput
                             label={'Filter'}
@@ -218,7 +220,7 @@ const SettingsCard = ({ statusQuery }) => {
                         </Row>
                     </Col>
 
-                    <Col md={4} className={'mt-4'}>
+                    <Col md={4}>
                         <p className={'fw-bold fs-5 mb-3'}>Advanced</p>
                         <SwitchField
                             name={'dontPrintHostName'}
@@ -247,7 +249,7 @@ const SettingsCard = ({ statusQuery }) => {
                     </Col>
                 </Row>
 
-                <div className={'d-flex justify-content-end'}>
+                <FormActions>
                     <SubmitButton
                         label={'Capture'}
                         icon={'play'}
@@ -260,9 +262,8 @@ const SettingsCard = ({ statusQuery }) => {
                         onClick={stopCapture}
                         loading={stopCaptureRunning}
                         disabled={!isRunning}
-                        className={'ms-2'}
                     />
-                </div>
+                </FormActions>
             </FormProvider>
         </PanelCard>
     );
