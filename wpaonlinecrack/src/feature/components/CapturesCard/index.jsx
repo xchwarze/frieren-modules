@@ -5,12 +5,13 @@
  * More info at: https://github.com/xchwarze/frieren
  */
 import { useState } from 'react';
-import Table from 'react-bootstrap/Table';
 import Form from 'react-bootstrap/Form';
 import Badge from 'react-bootstrap/Badge';
 
-import PanelCard from '@src/components/PanelCard';
-import Button from '@src/components/Button';
+import PanelCard from '@common/components/PanelCard';
+import PanelTable from '@common/components/PanelTable';
+import Button from '@common/components/Button';
+import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useGetCapFiles from '@module/feature/hooks/useGetCapFiles.js';
 import useSendCap from '@module/feature/hooks/useSendCap.js';
@@ -18,7 +19,7 @@ import useSendCap from '@module/feature/hooks/useSendCap.js';
 const CapturesCard = () => {
     const query = useGetCapFiles();
     const { mutate: sendCaptures, isPending: sendCaptureRunning } = useSendCap();
-    const { data, isSuccess } = query;
+    const { data, isSuccess, isFetching, refetch } = query;
     const [selectedFiles, setSelectedFiles] = useState([]);
 
     const files = data?.files ?? [];
@@ -48,11 +49,12 @@ const CapturesCard = () => {
         <PanelCard
             title={'Captures'}
             subtitle={'The selected captures will be sent to all the services that you have configured. The listed formats are: .cap .pcap .pcapng .hccapx'}
-            query={query}
+            refetch={refetch}
+            isFetching={isFetching}
         >
             {isSuccess ? (
                 <>
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <thead>
                         <tr>
                             <th>
@@ -70,8 +72,8 @@ const CapturesCard = () => {
                         </thead>
                         <tbody>
                         {files.length > 0 ? (
-                            files.map((item, index) => (
-                                <tr key={index}>
+                            files.map((item) => (
+                                <tr key={item.path}>
                                     <td>
                                         <Form.Check
                                             type={'checkbox'}
@@ -97,9 +99,9 @@ const CapturesCard = () => {
                             </tr>
                         )}
                         </tbody>
-                    </Table>
+                    </PanelTable>
                     {files.length > 0 && (
-                        <div className={'d-flex justify-content-end'}>
+                        <FormActions>
                             <Button
                                 label={'Submit Selected'}
                                 icon={'upload'}
@@ -107,7 +109,7 @@ const CapturesCard = () => {
                                 disabled={selectedFiles.length === 0}
                                 onClick={handleSubmitSelected}
                             />
-                        </div>
+                        </FormActions>
                     )}
                 </>
             ) : (

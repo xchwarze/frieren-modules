@@ -6,7 +6,8 @@
  */
 import * as yup from 'yup';
 
-import PanelCard from '@src/components/PanelCard';
+import PanelCard from '@common/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SubmitButton from '@src/components/Form/SubmitButton';
@@ -31,7 +32,8 @@ const SettingsCard = () => {
         <PanelCard
             title={'Settings'}
             subtitle={<>To use these third party services you must be registered on their respective sites. <a href="https://wpa-sec.stanev.org/?get_key" target="_blank" rel="noopener noreferrer">Get your WPA-Sec API key here</a>.</>}
-            query={settingsQuery}
+            refetch={settingsQuery.refetch}
+            isFetching={settingsQuery.isFetching}
         >
             <FormProvider schema={wpaOnlineCrackSettingsSchema} onSubmit={setSettings} defaultValues={defaultValues}>
                 <InputField
@@ -44,9 +46,9 @@ const SettingsCard = () => {
                     label={'OnlineHashCrack Email'}
                     placeholder={'Enter your email for OnlineHashCrack'}
                 />
-                <div className={'d-flex justify-content-end'}>
+                <FormActions>
                     <SubmitButton />
-                </div>
+                </FormActions>
             </FormProvider>
         </PanelCard>
     );

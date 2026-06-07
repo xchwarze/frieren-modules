@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import Table from 'react-bootstrap/Table';
-
-import PanelCard from '@src/components/PanelCard';
-import Button from '@src/components/Button';
+import PanelCard from '@common/components/PanelCard';
+import PanelTable from '@common/components/PanelTable';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useCheckResults from '@module/feature/hooks/useCheckResults.js';
 
@@ -21,19 +19,11 @@ const ResultsCard = () => {
         <PanelCard
             title={'Cracked Results'}
             subtitle={'Networks cracked by WPA-Sec for your API key.'}
-            query={query}
+            refetch={refetch}
+            isFetching={isFetching}
         >
-            <div className={'d-flex justify-content-end mb-3'}>
-                <Button
-                    label={'Check Results'}
-                    icon={'search'}
-                    loading={isFetching}
-                    onClick={() => refetch()}
-                />
-            </div>
-
             {isSuccess ? (
-                <Table striped hover responsive>
+                <PanelTable>
                     <thead>
                     <tr>
                         <th>BSSID</th>
@@ -43,8 +33,8 @@ const ResultsCard = () => {
                     </thead>
                     <tbody>
                     {results.length > 0 ? (
-                        results.map((item, index) => (
-                            <tr key={index}>
+                        results.map((item) => (
+                            <tr key={item.bssid}>
                                 <td>{item.bssid}</td>
                                 <td>{item.essid}</td>
                                 <td>{item.password}</td>
@@ -56,7 +46,7 @@ const ResultsCard = () => {
                         </tr>
                     )}
                     </tbody>
-                </Table>
+                </PanelTable>
             ) : (
                 <SkeletonTable
                     headers={['BSSID', 'ESSID', 'Password']}
