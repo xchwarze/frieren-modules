@@ -11,7 +11,7 @@ import PanelCard from '@common/components/PanelCard';
 import FormProvider from '@src/components/Form/FormProvider';
 import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
-import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SkeletonBar from '@common/components/SkeletonBar';
 import useGetFstabConfig from '@module/feature/hooks/useGetFstabConfig.js';
 import useSaveFstabConfig from '@module/feature/hooks/useSaveFstabConfig.js';
 
@@ -55,7 +55,10 @@ const ConfigCard = () => {
                     <SubmitButton />
                 </FormProvider>
             ) : (
-                <SkeletonTable widths={[500]} rows={8} />
+                <>
+                    <SkeletonBar width={500} height={400} barHeight={394} />
+                    <SkeletonBar width={120} height={42} barHeight={36} />
+                </>
             )}
         </PanelCard>
     );
