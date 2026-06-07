@@ -4,12 +4,18 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
+import { useState, useMemo } from 'react';
+
 import PanelCard from '@src/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
 import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import TablePagination from '@src/components/TablePagination';
+import SearchInput from '@src/components/SearchInput';
 import Button from '@src/components/Button';
+import useDebouncedValue from '@src/hooks/useDebouncedValue.js';
+import usePagination from '@src/hooks/usePagination.js';
 import useGetCaptureHistory from '@module/feature/hooks/useGetCaptureHistory.js';
 import useDeleteCapture from '@module/feature/hooks/useDeleteCapture.js';
 import useDeleteAll from '@module/feature/hooks/useDeleteAll.js';
@@ -21,6 +27,19 @@ const CaptureHistory = () => {
     const { mutate: deleteAll, isPending: deleteAllRunning } = useDeleteAll();
     const { mutate: downloadCapture, isPending: downloadCaptureRunning } = useDownloadCaptureOutput();
     const { data, isSuccess } = query;
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebouncedValue(searchTerm);
+
+    const filteredFiles = useMemo(() => {
+        const files = data?.files ?? [];
+        if (!debouncedSearch) {
+            return files;
+        }
+        const term = debouncedSearch.toLowerCase();
+        return files.filter((file) => (file ?? '').toLowerCase().includes(term));
+    }, [data, debouncedSearch]);
+
+    const { pageData, currentPage, totalPages, setCurrentPage } = usePagination(filteredFiles);
 
     const handleDownloadClick = (item) => {
         downloadCapture({
@@ -42,6 +61,12 @@ const CaptureHistory = () => {
         >
             {isSuccess ? (
                 <>
+                    <SearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder={'Search capture files...'}
+                    />
+
                     <PanelTable>
                         <thead>
                             <tr>
@@ -50,8 +75,8 @@ const CaptureHistory = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.files.length > 0 ? (
-                                data.files.map((item) => (
+                            {filteredFiles.length > 0 ? (
+                                pageData.map((item) => (
                                     <tr key={item}>
                                         <td>{item}</td>
                                         <td>
@@ -80,6 +105,14 @@ const CaptureHistory = () => {
                             )}
                         </tbody>
                     </PanelTable>
+
+                    <TablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        totalItems={filteredFiles.length}
+                    />
+
                     <FormActions>
                         <Button
                             label={'Delete History'}
