@@ -10,7 +10,7 @@ import Form from 'react-bootstrap/Form';
 
 import PanelCard from '@common/components/PanelCard';
 import FormActions from '@common/components/FormActions';
-import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SkeletonBar from '@common/components/SkeletonBar';
 import Button from '@common/components/Button';
 import useGetStatus from '@module/feature/hooks/useGetStatus.js';
 import useStartPortal from '@module/feature/hooks/useStartPortal.js';
@@ -98,10 +98,15 @@ const ControlCard = () => {
             </FormActions>
             </>
             ) : (
-                <SkeletonTable
-                    widths={[400]}
-                    rows={3}
-                />
+                <>
+                <div className={'d-flex align-items-center gap-2'}>
+                    <SkeletonBar width={200} height={31} barHeight={24} />
+                </div>
+                <Form.Group className={'mb-3'}>
+                    <SkeletonBar width={100} height={24} barHeight={16} />
+                    <SkeletonBar width={400} height={38} barHeight={32} />
+                </Form.Group>
+                </>
             )}
         </PanelCard>
     );

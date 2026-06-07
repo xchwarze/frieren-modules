@@ -8,7 +8,7 @@ import Form from 'react-bootstrap/Form';
 
 import PanelCard from '@common/components/PanelCard';
 import FormActions from '@common/components/FormActions';
-import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SkeletonBar from '@common/components/SkeletonBar';
 import Button from '@common/components/Button';
 import useGetLogs from '@module/feature/hooks/useGetLogs.js';
 import useClearLogs from '@module/feature/hooks/useClearLogs.js';
@@ -37,11 +37,13 @@ const LogsCard = () => {
                     style={{ fontSize: '0.85rem' }}
                 />
             ) : (
-                <SkeletonTable
-                    widths={[600]}
-                    rows={12}
-                    className={'mb-3'}
-                />
+                <div className={'mb-3'}>
+                    <SkeletonBar
+                        width={600}
+                        height={240}
+                        barHeight={234}
+                    />
+                </div>
             )}
             <FormActions>
                 <Button

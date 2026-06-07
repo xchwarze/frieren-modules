@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Form from 'react-bootstrap/Form';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
@@ -14,7 +14,11 @@ import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
 import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SearchInput from '@common/components/SearchInput';
+import TablePagination from '@common/components/TablePagination';
 import Button from '@common/components/Button';
+import useDebouncedValue from '@common/hooks/useDebouncedValue.js';
+import usePagination from '@common/hooks/usePagination.js';
 import useListPortals from '@module/feature/hooks/useListPortals.js';
 import useDeletePortal from '@module/feature/hooks/useDeletePortal.js';
 import useGetPortalFiles from '@module/feature/hooks/useGetPortalFiles.js';
@@ -28,12 +32,26 @@ const PortalsCard = () => {
     const [editingPortal, setEditingPortal] = useState(null);
     const [editingFile, setEditingFile] = useState(null);
     const [fileContent, setFileContent] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebouncedValue(searchTerm);
 
     const filesQuery = useGetPortalFiles(editingPortal);
     const portals = portalsQuery?.data?.portals ?? [];
     const files = filesQuery?.data?.files ?? [];
     const portalsLoaded = portalsQuery.isSuccess;
     const filesLoaded = filesQuery.isSuccess;
+
+    const filteredPortals = useMemo(() => {
+        if (!debouncedSearch) {
+            return portals;
+        }
+        const term = debouncedSearch.toLowerCase();
+        return portals.filter((portal) =>
+            (portal.name ?? '').toLowerCase().includes(term)
+        );
+    }, [portals, debouncedSearch]);
+
+    const { pageData, currentPage, totalPages, setCurrentPage } = usePagination(filteredPortals);
 
     const handleEdit = (portalName) => {
         setEditingPortal(portalName);
@@ -128,6 +146,13 @@ const PortalsCard = () => {
             isFetching={portalsQuery.isFetching}
         >
             {portalsLoaded ? (
+            <>
+            <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder={'Search portals...'}
+            />
+
             <PanelTable size={'sm'}>
                 <thead>
                     <tr>
@@ -138,7 +163,7 @@ const PortalsCard = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {portals.map((portal) => (
+                    {pageData.map((portal) => (
                         <tr key={portal.name}>
                             <td>{portal.title || portal.name}</td>
                             <td>{portal.description}</td>
@@ -164,7 +189,7 @@ const PortalsCard = () => {
                             </td>
                         </tr>
                     ))}
-                    {portals.length === 0 && (
+                    {filteredPortals.length === 0 && (
                         <tr>
                             <td colSpan={4} className={'text-center text-body-secondary'}>
                                 No portals installed. Copy portal templates to the portals directory.
@@ -173,6 +198,14 @@ const PortalsCard = () => {
                     )}
                 </tbody>
             </PanelTable>
+
+            <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={filteredPortals.length}
+            />
+            </>
             ) : (
                 <SkeletonTable
                     headers={['Name', 'Description', 'Author', 'Actions']}

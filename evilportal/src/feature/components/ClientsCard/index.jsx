@@ -4,10 +4,16 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
+import { useMemo, useState } from 'react';
+
 import PanelCard from '@common/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SearchInput from '@common/components/SearchInput';
+import TablePagination from '@common/components/TablePagination';
 import Button from '@common/components/Button';
+import useDebouncedValue from '@common/hooks/useDebouncedValue.js';
+import usePagination from '@common/hooks/usePagination.js';
 import useGetClients from '@module/feature/hooks/useGetClients.js';
 import useDeauthorizeClient from '@module/feature/hooks/useDeauthorizeClient.js';
 
@@ -16,7 +22,22 @@ const ClientsCard = () => {
     const { isSuccess } = clientsQuery;
     const { mutateAsync: deauthMutation, isPending: deauthPending } = useDeauthorizeClient();
 
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebouncedValue(searchTerm);
+
     const clients = clientsQuery?.data?.clients ?? [];
+
+    const filteredClients = useMemo(() => {
+        if (!debouncedSearch) {
+            return clients;
+        }
+        const term = debouncedSearch.toLowerCase();
+        return clients.filter((client) =>
+            [client.mac, client.ip].some((field) => (field ?? '').toLowerCase().includes(term))
+        );
+    }, [clients, debouncedSearch]);
+
+    const { pageData, currentPage, totalPages, setCurrentPage } = usePagination(filteredClients);
 
     return (
         <PanelCard
@@ -26,6 +47,13 @@ const ClientsCard = () => {
             isFetching={clientsQuery.isFetching}
         >
             {isSuccess ? (
+                <>
+                <SearchInput
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder={'Search clients...'}
+                />
+
                 <PanelTable size={'sm'}>
                     <thead>
                         <tr>
@@ -36,8 +64,8 @@ const ClientsCard = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {clients.map((client) => (
-                            <tr key={client.ip}>
+                        {pageData.map((client) => (
+                            <tr key={client.mac}>
                                 <td><code>{client.ip}</code></td>
                                 <td><code>{client.mac}</code></td>
                                 <td>{client.timestamp}</td>
@@ -53,7 +81,7 @@ const ClientsCard = () => {
                                 </td>
                             </tr>
                         ))}
-                        {clients.length === 0 && (
+                        {filteredClients.length === 0 && (
                             <tr>
                                 <td colSpan={4} className={'text-center text-body-secondary'}>
                                     No authorized clients
@@ -62,6 +90,14 @@ const ClientsCard = () => {
                         )}
                     </tbody>
                 </PanelTable>
+
+                <TablePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredClients.length}
+                />
+                </>
             ) : (
                 <SkeletonTable
                     headers={['IP Address', 'MAC Address', 'Authorized At', 'Actions']}
