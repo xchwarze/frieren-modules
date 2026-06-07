@@ -31,16 +31,16 @@ const SystemStatsCard = () => {
     return (
         <PanelCard
             title={'System Stats'}
-            query={query}
-            isLoading={false}
+            refetch={query.refetch}
+            isFetching={query.isFetching}
         >
-            <div className={'d-flex justify-content-evenly mt-2'}>
+            <div className={'d-flex justify-content-evenly'}>
                 {stats.map(({ key, label }) => (
                     <div key={key} className={'text-center'}>
                         <p className={'fs-4 mb-0'}>
                             {isSuccess ? (data?.[key] ?? '') : (<SkeletonBar width={60} height={32} barHeight={20} />)}
                         </p>
-                        <span className={'text-muted text-uppercase'}>
+                        <span className={'text-body-secondary text-uppercase'}>
                             {label}
                         </span>
                     </div>
