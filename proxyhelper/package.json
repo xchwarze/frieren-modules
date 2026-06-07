@@ -1,0 +1,53 @@
+{
+  "name": "proxyhelper",
+  "version": "1.0.0",
+  "description": "Route traffic through Burp Suite proxy via iptables",
+  "license": "LGPL-3.0-only",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "wizard": "node ./bin/wizard.js",
+    "validate": "node ./bin/validate.js",
+    "update-module": "node ./bin/update-module.js",
+    "version-bump": "node ./bin/version-bump.js",
+    "outdated": "yarn upgrade-interactive"
+  },
+  "peerDependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-query": "^5.100.9",
+    "bootstrap": "^5.3.8",
+    "jotai": "^2.20.0",
+    "prop-types": "^15.8.1",
+    "react": "^18.3.1",
+    "react-bootstrap": "^2.10.10",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.75.0",
+    "react-toastify": "^11.1.0",
+    "wouter": "^3.9.0",
+    "yup": "^1.7.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@inquirer/prompts": "^8.4.2",
+    "@tanstack/eslint-plugin-query": "^5.100.9",
+    "@vitejs/plugin-react": "^4.7.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "eslint": "^9.39.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "fs-extra": "^11.3.5",
+    "globals": "^17.6.0",
+    "vite": "^7.3.3",
+    "vite-bundle-analyzer": "^1.3.8",
+    "vite-plugin-compression2": "^2.5.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "yarn@4.14.1+sha512.64df448055b2d37ba269d7db535a469b8da93f8ef1140c25fd7a83c00a8fbaacb214ca0e02553b92a2c54cef78bb67d0b4817fab02001df0e24fac0faccc3b42"
+}

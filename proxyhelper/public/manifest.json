@@ -1,0 +1,24 @@
+{
+  "title": "Proxy Helper",
+  "name": "proxyhelper",
+  "description": "Route traffic through Burp Suite proxy via iptables",
+  "icon": "shuffle",
+  "author": {
+    "name": "DSR!",
+    "email": "xchwarze@gmail.com"
+  },
+  "keywords": [
+    "proxy",
+    "iptables"
+  ],
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/proxyhelper",
+  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
+  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "guestType": [
+    "OpenWrt"
+  ],
+  "dependencies": [],
+  "system": false,
+  "forceSidebar": false,
+  "version": "1.0.0"
+}
