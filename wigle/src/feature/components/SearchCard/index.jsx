@@ -7,17 +7,18 @@
 import { useState } from 'react';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
-import Table from 'react-bootstrap/Table';
 import Collapse from 'react-bootstrap/Collapse';
 import BaseButton from 'react-bootstrap/Button';
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
+import PanelTable from '@src/components/PanelTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SelectField from '@src/components/Form/SelectField';
 import SwitchField from '@src/components/Form/SwitchField';
 import SubmitButton from '@src/components/Form/SubmitButton';
+import FormActions from '@src/components/FormActions';
 import Button from '@src/components/Button';
 import useSearch from '@module/feature/hooks/useSearch.js';
 import useNetworkDetail from '@module/feature/hooks/useNetworkDetail.js';
@@ -106,7 +107,7 @@ const buildWigleNetworkUrl = (netid) => {
 };
 
 const SearchCard = () => {
-    const { mutate: search, data: searchData, variables: searchParams, isPending } = useSearch();
+    const { mutate: search, data: searchData, variables: searchParams, isPending, isSuccess } = useSearch();
     const { mutate: fetchDetail, data: detailData, isPending: detailPending, reset: resetDetail } = useNetworkDetail();
     const [detailNetid, setDetailNetid] = useState(null);
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -182,7 +183,7 @@ const SearchCard = () => {
                     </Col>
                 </Row>
 
-                <div className={'mt-3'}>
+                <div>
                     <BaseButton
                         variant={'link'}
                         size={'sm'}
@@ -238,14 +239,14 @@ const SearchCard = () => {
                     </div>
                 </Collapse>
 
-                <div className={'d-flex justify-content-end mt-3'}>
+                <FormActions>
                     <SubmitButton label={'Search'} icon={'search'} loading={isPending} />
-                </div>
+                </FormActions>
             </FormProvider>
 
-            {results.length > 0 && (
+            {isSuccess && (
                 <>
-                    <p className={'text-muted mt-3 mb-2'}>
+                    <p className={'text-body-secondary mt-3 mb-2'}>
                         Total results: {totalResults}
                         {' — '}
                         <a
@@ -256,7 +257,7 @@ const SearchCard = () => {
                             View on WiGLE.net
                         </a>
                     </p>
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <thead>
                             <tr>
                                 <th>SSID</th>
@@ -272,41 +273,47 @@ const SearchCard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {results.map((result, index) => (
-                                <tr key={index}>
-                                    <td>{result.ssid}</td>
-                                    <td>
-                                        <BaseButton
-                                            variant={'link'}
-                                            size={'sm'}
-                                            className={'p-0 font-monospace'}
-                                            onClick={() => handleShowDetail(result.netid)}
-                                        >
-                                            {result.netid}
-                                        </BaseButton>
-                                    </td>
-                                    <td>{result.channel}</td>
-                                    <td>{result.encryption}</td>
-                                    <td>{result.country}</td>
-                                    <td>{result.city}</td>
-                                    <td>{result.road}</td>
-                                    <td>{result.dhcp}</td>
-                                    <td>{result.trilat}, {result.trilong}</td>
-                                    <td>
-                                        {result.netid && (
-                                            <a
-                                                href={buildWigleNetworkUrl(result.netid)}
-                                                target={'_blank'}
-                                                rel={'noopener noreferrer'}
+                            {results.length > 0 ? (
+                                results.map((result) => (
+                                    <tr key={result.netid}>
+                                        <td>{result.ssid}</td>
+                                        <td>
+                                            <BaseButton
+                                                variant={'link'}
+                                                size={'sm'}
+                                                className={'p-0 font-monospace'}
+                                                onClick={() => handleShowDetail(result.netid)}
                                             >
-                                                WiGLE.net
-                                            </a>
-                                        )}
-                                    </td>
+                                                {result.netid}
+                                            </BaseButton>
+                                        </td>
+                                        <td>{result.channel}</td>
+                                        <td>{result.encryption}</td>
+                                        <td>{result.country}</td>
+                                        <td>{result.city}</td>
+                                        <td>{result.road}</td>
+                                        <td>{result.dhcp}</td>
+                                        <td>{result.trilat}, {result.trilong}</td>
+                                        <td>
+                                            {result.netid && (
+                                                <a
+                                                    href={buildWigleNetworkUrl(result.netid)}
+                                                    target={'_blank'}
+                                                    rel={'noopener noreferrer'}
+                                                >
+                                                    WiGLE.net
+                                                </a>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={10}>No networks found</td>
                                 </tr>
-                            ))}
+                            )}
                         </tbody>
-                    </Table>
+                    </PanelTable>
                     {searchAfter && (
                         <div className={'d-flex justify-content-center mt-2'}>
                             <Button

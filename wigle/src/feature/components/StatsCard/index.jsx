@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import Table from 'react-bootstrap/Table';
-
 import PanelCard from '@src/components/PanelCard';
+import PanelTable from '@src/components/PanelTable';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useUserStats from '@module/feature/hooks/useUserStats.js';
 
@@ -19,10 +18,11 @@ const StatsCard = () => {
         <PanelCard
             title={'User Statistics'}
             subtitle={'Your WiGLE account stats — confirms API token is working'}
-            query={query}
+            refetch={query.refetch}
+            isFetching={query.isFetching}
         >
             {isSuccess && stats ? (
-                <Table striped hover responsive>
+                <PanelTable>
                     <tbody>
                         {Object.entries(stats).map(([key, value]) => (
                             <tr key={key}>
@@ -31,7 +31,7 @@ const StatsCard = () => {
                             </tr>
                         ))}
                     </tbody>
-                </Table>
+                </PanelTable>
             ) : (
                 <SkeletonTable widths={[120, 180]} rows={5} />
             )}

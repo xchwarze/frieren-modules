@@ -6,14 +6,15 @@
  */
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
-import Table from 'react-bootstrap/Table';
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
+import PanelTable from '@src/components/PanelTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SelectField from '@src/components/Form/SelectField';
 import SubmitButton from '@src/components/Form/SubmitButton';
+import FormActions from '@src/components/FormActions';
 import Button from '@src/components/Button';
 import useCellSearch from '@module/feature/hooks/useCellSearch.js';
 
@@ -38,7 +39,7 @@ const defaultValues = {
 };
 
 const CellCard = () => {
-    const { mutate: search, data: searchData, variables: searchParams, isPending } = useCellSearch();
+    const { mutate: search, data: searchData, variables: searchParams, isPending, isSuccess } = useCellSearch();
 
     const results = searchData?.results ?? [];
     const totalResults = searchData?.totalResults ?? 0;
@@ -85,17 +86,17 @@ const CellCard = () => {
                         />
                     </Col>
                 </Row>
-                <div className={'d-flex justify-content-end mt-3'}>
+                <FormActions>
                     <SubmitButton label={'Search'} icon={'search'} loading={isPending} />
-                </div>
+                </FormActions>
             </FormProvider>
 
-            {results.length > 0 && (
+            {isSuccess && (
                 <>
-                    <p className={'text-muted mt-3 mb-2'}>
+                    <p className={'text-body-secondary mt-3 mb-2'}>
                         Total results: {totalResults}
                     </p>
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <thead>
                             <tr>
                                 <th>Operator</th>
@@ -109,20 +110,26 @@ const CellCard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {results.map((result, index) => (
-                                <tr key={index}>
-                                    <td>{result.operator}</td>
-                                    <td>{result.mcc}</td>
-                                    <td>{result.mnc}</td>
-                                    <td>{result.lac}</td>
-                                    <td>{result.cid}</td>
-                                    <td>{result.type}</td>
-                                    <td>{result.country}</td>
-                                    <td>{result.trilat}, {result.trilong}</td>
+                            {results.length > 0 ? (
+                                results.map((result) => (
+                                    <tr key={`${result.mcc}-${result.mnc}-${result.lac}-${result.cid}`}>
+                                        <td>{result.operator}</td>
+                                        <td>{result.mcc}</td>
+                                        <td>{result.mnc}</td>
+                                        <td>{result.lac}</td>
+                                        <td>{result.cid}</td>
+                                        <td>{result.type}</td>
+                                        <td>{result.country}</td>
+                                        <td>{result.trilat}, {result.trilong}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={8}>No networks found</td>
                                 </tr>
-                            ))}
+                            )}
                         </tbody>
-                    </Table>
+                    </PanelTable>
                     {searchAfter && (
                         <div className={'d-flex justify-content-center mt-2'}>
                             <Button

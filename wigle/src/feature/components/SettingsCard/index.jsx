@@ -10,6 +10,7 @@ import PanelCard from '@src/components/PanelCard';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SubmitButton from '@src/components/Form/SubmitButton';
+import FormActions from '@src/components/FormActions';
 import useGetSettings from '@module/feature/hooks/useGetSettings.js';
 import useSaveSettings from '@module/feature/hooks/useSaveSettings.js';
 
@@ -29,7 +30,8 @@ const SettingsCard = () => {
         <PanelCard
             title={'Settings'}
             subtitle={'Enter your WiGLE encoded API token. Get it from wigle.net/account'}
-            query={settingsQuery}
+            refetch={settingsQuery.refetch}
+            isFetching={settingsQuery.isFetching}
         >
             <FormProvider schema={settingsSchema} onSubmit={saveSettings} defaultValues={defaultValues}>
                 <InputField
@@ -37,9 +39,9 @@ const SettingsCard = () => {
                     label={'Encoded API Token'}
                     placeholder={'Enter your WiGLE API token'}
                 />
-                <div className={'d-flex justify-content-end'}>
+                <FormActions>
                     <SubmitButton />
-                </div>
+                </FormActions>
             </FormProvider>
         </PanelCard>
     );

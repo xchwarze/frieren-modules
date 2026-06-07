@@ -5,9 +5,10 @@
  * More info at: https://github.com/xchwarze/frieren
  */
 import Modal from 'react-bootstrap/Modal';
-import Table from 'react-bootstrap/Table';
 import Spinner from 'react-bootstrap/Spinner';
 import PropTypes from 'prop-types';
+
+import PanelTable from '@src/components/PanelTable';
 
 const NetworkDetailModal = ({ show, onHide, netid, data, loading }) => {
     const results = data?.results;
@@ -28,11 +29,11 @@ const NetworkDetailModal = ({ show, onHide, netid, data, loading }) => {
                 )}
 
                 {!loading && !detail && (
-                    <p className={'text-muted mb-0'}>No detail available for this network.</p>
+                    <p className={'text-body-secondary mb-0'}>No detail available for this network.</p>
                 )}
 
                 {!loading && detail && (
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <tbody>
                             {Object.entries(detail).map(([key, value]) => (
                                 <tr key={key}>
@@ -41,7 +42,7 @@ const NetworkDetailModal = ({ show, onHide, netid, data, loading }) => {
                                 </tr>
                             ))}
                         </tbody>
-                    </Table>
+                    </PanelTable>
                 )}
             </Modal.Body>
         </Modal>

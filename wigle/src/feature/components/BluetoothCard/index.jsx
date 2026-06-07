@@ -6,14 +6,15 @@
  */
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
-import Table from 'react-bootstrap/Table';
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
+import PanelTable from '@src/components/PanelTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SelectField from '@src/components/Form/SelectField';
 import SubmitButton from '@src/components/Form/SubmitButton';
+import FormActions from '@src/components/FormActions';
 import Button from '@src/components/Button';
 import useBluetoothSearch from '@module/feature/hooks/useBluetoothSearch.js';
 
@@ -34,7 +35,7 @@ const defaultValues = {
 };
 
 const BluetoothCard = () => {
-    const { mutate: search, data: searchData, variables: searchParams, isPending } = useBluetoothSearch();
+    const { mutate: search, data: searchData, variables: searchParams, isPending, isSuccess } = useBluetoothSearch();
 
     const results = searchData?.results ?? [];
     const totalResults = searchData?.totalResults ?? 0;
@@ -75,17 +76,17 @@ const BluetoothCard = () => {
                         />
                     </Col>
                 </Row>
-                <div className={'d-flex justify-content-end mt-3'}>
+                <FormActions>
                     <SubmitButton label={'Search'} icon={'search'} loading={isPending} />
-                </div>
+                </FormActions>
             </FormProvider>
 
-            {results.length > 0 && (
+            {isSuccess && (
                 <>
-                    <p className={'text-muted mt-3 mb-2'}>
+                    <p className={'text-body-secondary mt-3 mb-2'}>
                         Total results: {totalResults}
                     </p>
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -97,18 +98,24 @@ const BluetoothCard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {results.map((result, index) => (
-                                <tr key={index}>
-                                    <td>{result.name}</td>
-                                    <td><code>{result.netid}</code></td>
-                                    <td>{result.type}</td>
-                                    <td>{result.country}</td>
-                                    <td>{result.city}</td>
-                                    <td>{result.trilat}, {result.trilong}</td>
+                            {results.length > 0 ? (
+                                results.map((result) => (
+                                    <tr key={result.netid}>
+                                        <td>{result.name}</td>
+                                        <td><code>{result.netid}</code></td>
+                                        <td>{result.type}</td>
+                                        <td>{result.country}</td>
+                                        <td>{result.city}</td>
+                                        <td>{result.trilat}, {result.trilong}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={6}>No devices found</td>
                                 </tr>
-                            ))}
+                            )}
                         </tbody>
-                    </Table>
+                    </PanelTable>
                     {searchAfter && (
                         <div className={'d-flex justify-content-center mt-2'}>
                             <Button
