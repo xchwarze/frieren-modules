@@ -11,6 +11,7 @@ import * as yup from 'yup';
 import PropTypes from 'prop-types';
 
 import PanelCard from '@src/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import Button from '@src/components/Button';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
@@ -181,11 +182,12 @@ const SettingsCard = ({ statusQuery }) => {
     return (
         <PanelCard
             title={'Capture Settings'}
-            query={statusQuery}
+            refetch={statusQuery.refetch}
+            isFetching={statusQuery.isFetching}
         >
             <FormProvider schema={hcxdumptoolSettingsSchema} onSubmit={handleSubmit} defaultValues={defaultValues}>
-                <Row className={'g-4'}>
-                    <Col md={6} className={'mt-4'}>
+                <Row className={'g-3'}>
+                    <Col md={6}>
                         <p className={'fw-bold fs-5 mb-3'}>Core</p>
                         <SelectField
                             name={'interface'}
@@ -223,7 +225,7 @@ const SettingsCard = ({ statusQuery }) => {
                             placeholder={'Seconds'}
                         />
 
-                        <p className={'fw-bold fs-5 mb-3 mt-4'}>Filtering</p>
+                        <p className={'fw-bold fs-5 mb-3'}>Filtering</p>
                         <SelectField
                             name={'filtermode'}
                             label={'Filter Mode (--filtermode)'}
@@ -253,7 +255,7 @@ const SettingsCard = ({ statusQuery }) => {
                             placeholder={'MyNetwork'}
                         />
 
-                        <p className={'fw-bold fs-5 mb-3 mt-4'}>Timing</p>
+                        <p className={'fw-bold fs-5 mb-3'}>Timing</p>
                         <InputField
                             name={'tot'}
                             label={'Capture timeout minutes (--tot, min: 2)'}
@@ -271,7 +273,7 @@ const SettingsCard = ({ statusQuery }) => {
                         />
                     </Col>
 
-                    <Col md={6} className={'mt-4'}>
+                    <Col md={6}>
                         <p className={'fw-bold fs-5 mb-3'}>Status Display (--enable_status)</p>
                         {STATUS_FLAGS.map((flag) => (
                             <SwitchField
@@ -281,7 +283,7 @@ const SettingsCard = ({ statusQuery }) => {
                             />
                         ))}
 
-                        <p className={'fw-bold fs-5 mb-3 mt-4'}>Attack Control</p>
+                        <p className={'fw-bold fs-5 mb-3'}>Attack Control</p>
                         <SwitchField
                             name={'disableClientAttacks'}
                             label={'Disable client attacks'}
@@ -309,7 +311,7 @@ const SettingsCard = ({ statusQuery }) => {
                             placeholder={'Number of frames'}
                         />
 
-                        <p className={'fw-bold fs-5 mb-3 mt-4'}>Other</p>
+                        <p className={'fw-bold fs-5 mb-3'}>Other</p>
                         <InputField
                             name={'macAp'}
                             label={'AP MAC (--mac_ap, hex)'}
@@ -341,7 +343,7 @@ const SettingsCard = ({ statusQuery }) => {
                     </Col>
                 </Row>
 
-                <div className={'d-flex justify-content-end'}>
+                <FormActions>
                     <SubmitButton
                         label={'Capture'}
                         icon={'play'}
@@ -354,9 +356,8 @@ const SettingsCard = ({ statusQuery }) => {
                         onClick={stopCapture}
                         loading={stopCaptureRunning}
                         disabled={!isRunning}
-                        className={'ms-2'}
                     />
-                </div>
+                </FormActions>
             </FormProvider>
         </PanelCard>
     );

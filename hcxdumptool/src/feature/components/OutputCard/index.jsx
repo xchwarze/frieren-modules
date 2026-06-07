@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import Form from 'react-bootstrap/Form';
 
 import PanelCard from '@src/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import Button from '@src/components/Button';
 import useGetLogContent from '@module/feature/hooks/useGetLogContent.js';
 import useDownloadCaptureOutput from "@module/feature/hooks/useDownloadCaptureOutput.js";
@@ -29,8 +30,8 @@ const OutputCard = () => {
     return (
         <PanelCard
             title={'Output'}
-            query={query}
-            className={'mt-3'}
+            refetch={query.refetch}
+            isFetching={query.isFetching}
         >
             <Form.Group className={'mb-3'}>
                 <Form.Control
@@ -39,10 +40,10 @@ const OutputCard = () => {
                     rows={6}
                     readOnly={true}
                     value={resume}
-                    className={'text-muted'}
+                    className={'text-body-secondary'}
                 />
             </Form.Group>
-            <div className={'d-flex justify-content-end'}>
+            <FormActions>
                 <Button
                     label={'Download'}
                     icon={'download'}
@@ -51,7 +52,7 @@ const OutputCard = () => {
                     loading={downloadCaptureRunning}
                     onClick={downloadCapture}
                 />
-            </div>
+            </FormActions>
         </PanelCard>
     );
 };

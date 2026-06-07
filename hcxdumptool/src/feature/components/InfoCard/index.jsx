@@ -39,7 +39,7 @@ const InfoCard = ({ statusQuery }) => {
     return (
         <PanelCard
             title={'Tool Info'}
-            className={'mt-3'}
+            showRefresh={false}
         >
             <Row className={'g-3'}>
                 <Col md={6}>
@@ -58,7 +58,7 @@ const InfoCard = ({ statusQuery }) => {
                 </Col>
             </Row>
 
-            <div className={'d-flex flex-wrap gap-2 mt-3'}>
+            <div className={'d-flex flex-wrap gap-2'}>
                 <Button
                     label={'List Interfaces (-L)'}
                     icon={'list'}
@@ -90,13 +90,13 @@ const InfoCard = ({ statusQuery }) => {
                 />
             </div>
 
-            <Form.Group className={'mt-3'}>
+            <Form.Group>
                 <Form.Control
                     as={'textarea'}
                     rows={8}
                     readOnly={true}
                     value={output || 'Run a command to see its output.'}
-                    className={'text-muted font-monospace'}
+                    className={'text-body-secondary font-monospace'}
                 />
             </Form.Group>
         </PanelCard>

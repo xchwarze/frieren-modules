@@ -7,6 +7,7 @@
 import Tab from 'react-bootstrap/Tab';
 
 import DependenciesAlert from '@src/components/DependenciesAlert';
+import PanelStack from '@common/components/PanelCard/PanelStack';
 import PanelTabs from '@src/components/Tabs/PanelTabs';
 import TabTitle from '@src/components/Tabs/TabTitle';
 import ConditionalTabContent from '@src/components/Tabs/ConditionalTabContent';
@@ -37,9 +38,11 @@ const Screen = () => {
             <PanelTabs id={'hcxdumptool'} defaultTab={'capture'}>
                 <Tab eventKey={'capture'} title={<TabTitle title={'Capture'} icon={'radio'} />}>
                     <ConditionalTabContent id={'hcxdumptool'} eventKey={'capture'}>
-                        <SettingsCard statusQuery={statusQuery} />
-                        <OutputCard />
-                        <InfoCard statusQuery={statusQuery} />
+                        <PanelStack>
+                            <SettingsCard statusQuery={statusQuery} />
+                            <OutputCard />
+                            <InfoCard statusQuery={statusQuery} />
+                        </PanelStack>
                     </ConditionalTabContent>
                 </Tab>
                 <Tab eventKey={'history'} title={<TabTitle title={'History'} icon={'file-text'} />}>
