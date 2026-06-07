@@ -20,8 +20,9 @@ import { useAtomValue } from 'jotai';
 import * as yup from 'yup';
 import PropTypes from 'prop-types';
 
-import PanelCard from '@src/components/PanelCard';
-import Button from '@src/components/Button';
+import PanelCard from '@common/components/PanelCard';
+import Button from '@common/components/Button';
+import FormActions from '@common/components/FormActions';
 import FormProvider from '@src/components/Form/FormProvider';
 import SwitchField from '@src/components/Form/SwitchField';
 import SelectField from '@src/components/Form/SelectField';
@@ -59,11 +60,12 @@ const OptionsCard = ({ statusQuery }) => {
     return (
         <PanelCard
             title={'Scan Settings'}
-            query={statusQuery}
+            refetch={statusQuery.refetch}
+            isFetching={statusQuery.isFetching}
         >
             <FormProvider schema={nmapSettingsSchema} onSubmit={startScan} defaultValues={defaultValues}>
-                <Row className={'g-4'}>
-                    <Col md={6} className={'mt-4'}>
+                <Row className={'g-3'}>
+                    <Col md={6}>
                         <p className={'fw-bold fs-5 mb-3'}>Basic Options</p>
                         <CommandInput label={'Command'} placeholder={'Enter Nmap command'} />
                         <InputField name={'target'} label={'Target'} placeholder={'Enter target'} />
@@ -99,7 +101,7 @@ const OptionsCard = ({ statusQuery }) => {
                         />
                     </Col>
 
-                    <Col md={6} className={'mt-4'}>
+                    <Col md={6}>
                         <p className={'fw-bold fs-5 mb-3'}>Advanced Options</p>
                         <SwitchField name={'verbose'} label={'Verbose'} />
                         <SwitchField name={'osDetection'} label={'OS Detection'} />
@@ -111,7 +113,7 @@ const OptionsCard = ({ statusQuery }) => {
                     </Col>
                 </Row>
 
-                <div className={'d-flex justify-content-end'}>
+                <FormActions>
                     <SubmitButton label={'Start Scan'} icon={'play'} loading={isRunning} />
                     <Button
                         label={'Stop Scan'}
@@ -120,9 +122,8 @@ const OptionsCard = ({ statusQuery }) => {
                         onClick={stopScan}
                         loading={stopScanRunning}
                         disabled={!isRunning}
-                        className={'ms-2'}
                     />
-                </div>
+                </FormActions>
             </FormProvider>
         </PanelCard>
     );

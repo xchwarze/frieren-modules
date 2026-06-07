@@ -17,6 +17,7 @@
 import Tab from 'react-bootstrap/Tab';
 
 import DependenciesAlert from '@src/components/DependenciesAlert';
+import PanelStack from '@common/components/PanelCard/PanelStack';
 import PanelTabs from '@src/components/Tabs/PanelTabs';
 import TabTitle from '@src/components/Tabs/TabTitle';
 import ConditionalTabContent from '@src/components/Tabs/ConditionalTabContent';
@@ -46,8 +47,10 @@ const Screen = () => {
             <PanelTabs id={'nmap'} defaultTab={'scan'}>
                 <Tab eventKey={'scan'} title={<TabTitle title={'Scan'} icon={'search'} />}>
                     <ConditionalTabContent id={'nmap'} eventKey={'scan'}>
-                        <OptionsCard statusQuery={statusQuery} />
-                        <OutputCard />
+                        <PanelStack>
+                            <OptionsCard statusQuery={statusQuery} />
+                            <OutputCard />
+                        </PanelStack>
                     </ConditionalTabContent>
                 </Tab>
                 <Tab eventKey={'history'} title={<TabTitle title={'History'} icon={'file-text'} />}>

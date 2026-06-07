@@ -15,10 +15,11 @@
  */
 
 import { useState } from 'react';
-import Table from 'react-bootstrap/Table';
-import PanelCard from '@src/components/PanelCard';
+import PanelCard from '@common/components/PanelCard';
+import PanelTable from '@common/components/PanelTable';
+import ActionButtons from '@common/components/ActionButtons';
+import Button from '@common/components/Button';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
-import Button from '@src/components/Button';
 import useGetHistory from '@module/feature/hooks/getHistory.js';
 import useDeleteHistory from '@module/feature/hooks/deleteHistory.js';
 import useGetHistoryContent from '@module/feature/hooks/getHistoryContent.js';
@@ -43,10 +44,10 @@ const HistoryCard = () => {
     const logContent = fileContentData?.logContent;
 
     return (
-        <PanelCard title={'History'} query={query}>
+        <PanelCard title={'History'} refetch={query.refetch} isFetching={query.isFetching}>
             {isSuccess ? (
                 <>
-                    <Table striped hover responsive>
+                    <PanelTable>
                         <thead>
                             <tr>
                                 <th>Scan File</th>
@@ -55,23 +56,24 @@ const HistoryCard = () => {
                         </thead>
                         <tbody>
                             {files.length > 0 ? (
-                                files.map((item, index) => (
-                                    <tr key={index}>
+                                files.map((item) => (
+                                    <tr key={item}>
                                         <td>{item}</td>
                                         <td>
-                                            <Button
-                                                label={'Open'}
-                                                icon={'folder-open'}
-                                                onClick={() => handleOpenClick(item)}
-                                            />
-                                            <Button
-                                                label={'Delete'}
-                                                icon={'trash-2'}
-                                                variant={'danger'}
-                                                loading={deleteHistoryRunning}
-                                                onClick={() => handleDeleteClick(item)}
-                                                className={'ms-2'}
-                                            />
+                                            <ActionButtons>
+                                                <Button
+                                                    label={'Open'}
+                                                    icon={'folder-open'}
+                                                    onClick={() => handleOpenClick(item)}
+                                                />
+                                                <Button
+                                                    label={'Delete'}
+                                                    icon={'trash-2'}
+                                                    variant={'danger'}
+                                                    loading={deleteHistoryRunning}
+                                                    onClick={() => handleDeleteClick(item)}
+                                                />
+                                            </ActionButtons>
                                         </td>
                                     </tr>
                                 ))
@@ -81,10 +83,10 @@ const HistoryCard = () => {
                                 </tr>
                             )}
                         </tbody>
-                    </Table>
+                    </PanelTable>
 
                     {selectedFile && (
-                        <div className="mt-4">
+                        <div className={'mt-4'}>
                             <h5>File Content: {selectedFile}</h5>
                             {isLoadingContent ? (
                                 <p>Loading content...</p>
