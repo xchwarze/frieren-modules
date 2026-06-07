@@ -7,7 +7,7 @@
 import { useEffect, useRef } from 'react';
 import * as yup from 'yup';
 
-import PanelCard from '@src/components/PanelCard';
+import PanelCard from '@common/components/PanelCard';
 import FormProvider from '@src/components/Form/FormProvider';
 import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
@@ -41,7 +41,8 @@ const ConfigCard = () => {
             title={'FSTAB Configuration'}
             subtitle={'Manage and configure system mount points through FSTAB settings.' +
                 'This interface allows you to view and update the filesystem table configuration, ensuring proper device and partition mounting on system startup.'}
-            query={query}
+            refetch={query.refetch}
+            isFetching={query.isFetching}
         >
             {isSuccess ? (
                 <FormProvider schema={fstabConfigSchema} defaultValues={defaultValues} onSubmit={saveFstabConfig}>
