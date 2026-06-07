@@ -4,14 +4,19 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 import PanelCard from '@common/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
 import FormActions from '@common/components/FormActions';
+import SearchInput from '@common/components/SearchInput';
+import TablePagination from '@common/components/TablePagination';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
+import SkeletonBar from '@src/components/SkeletonBar';
 import Button from '@common/components/Button';
+import useDebouncedValue from '@common/hooks/useDebouncedValue.js';
+import usePagination from '@common/hooks/usePagination.js';
 import { fetchPost } from '@src/services/fetchService.js';
 import useGetHistory from '@module/feature/hooks/useGetHistory.js';
 import useDeleteResult from '@module/feature/hooks/useDeleteResult.js';
@@ -27,6 +32,8 @@ const HistoryCard = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [fileContent, setFileContent] = useState(null);
     const [isLoadingContent, setIsLoadingContent] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const debounced = useDebouncedValue(searchTerm);
 
     const handleOpenClick = async (filename) => {
         setSelectedFile(filename);
@@ -53,11 +60,24 @@ const HistoryCard = () => {
     };
 
     const files = data?.files || [];
+    const filtered = useMemo(
+        () => (!debounced
+            ? files
+            : files.filter((f) => (f ?? '').toLowerCase().includes(debounced.toLowerCase()))),
+        [files, debounced],
+    );
+    const { pageData, currentPage, totalPages, setCurrentPage } = usePagination(filtered);
 
     return (
         <PanelCard title={'History'} refetch={query.refetch} isFetching={query.isFetching}>
             {isSuccess ? (
                 <>
+                    <SearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder={'Search by filename...'}
+                    />
+
                     <PanelTable>
                         <thead>
                             <tr>
@@ -66,8 +86,8 @@ const HistoryCard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {files.length > 0 ? (
-                                files.map((item) => (
+                            {filtered.length > 0 ? (
+                                pageData.map((item) => (
                                     <tr key={item}>
                                         <td>{item}</td>
                                         <td>
@@ -102,6 +122,13 @@ const HistoryCard = () => {
                         </tbody>
                     </PanelTable>
 
+                    <TablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        totalItems={filtered.length}
+                    />
+
                     <FormActions>
                         <Button
                             label={'Clear All'}
@@ -117,7 +144,7 @@ const HistoryCard = () => {
                         <div className={'mt-4'}>
                             <h5>File Content: {selectedFile}</h5>
                             {isLoadingContent ? (
-                                <p>Loading content...</p>
+                                <SkeletonBar width={600} height={120} barHeight={112} />
                             ) : (
                                 <pre>{fileContent || 'No content available.'}</pre>
                             )}
