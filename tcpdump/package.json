@@ -1,6 +1,6 @@
 {
   "name": "tcpdump",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "TCPDump Web Interface for Simplified Packet Analysis",
   "license": "LGPL-3.0-only",
   "type": "module",

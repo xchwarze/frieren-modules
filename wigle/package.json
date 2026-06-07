@@ -1,6 +1,6 @@
 {
   "name": "wigle",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "WiFi network lookup via WiGLE.net database",
   "license": "LGPL-3.0-only",
   "type": "module",
