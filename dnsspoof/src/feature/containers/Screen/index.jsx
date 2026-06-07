@@ -6,13 +6,14 @@
  */
 import * as yup from 'yup';
 
-import PanelCard from '@src/components/PanelCard';
+import PanelCard from '@common/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
-import Button from '@src/components/Button';
+import Button from '@common/components/Button';
 import useFetchHosts from '@module/feature/hooks/useFetchHosts';
 import useAddHost from '@module/feature/hooks/useAddHost';
 import useRestartService from '@module/feature/hooks/useRestartService';
@@ -42,7 +43,8 @@ const Screen = () => {
         <PanelCard
             title={'DNS Spoof'}
             subtitle={'Manage your DNS spoofing settings.'}
-            query={query}
+            refetch={query.refetch}
+            isFetching={query.isFetching}
         >
             {isSuccess ? (
                 <FormProvider schema={dnsSpoofSchema} onSubmit={addHostMutation} defaultValues={defaultValues}>
@@ -62,30 +64,29 @@ const Screen = () => {
                         label={'Domain'}
                         placeholder={'Enter domain'}
                     />
-                    <SubmitButton label={'Add'} icon={'plus'} />
-                    <Button
-                        label={'Restart Service'}
-                        icon={'refresh-cw'}
-                        onClick={restartMutation}
-                        loading={restartPending}
-                        className={'ms-2'}
-                    />
-                    <Button
-                        label={'Snapshot Hosts'}
-                        icon={'copy'}
-                        variant={'danger'}
-                        onClick={snapshotMutation}
-                        loading={snapshotPending}
-                        className={'ms-2'}
-                    />
-                    <Button
-                        label={'Rollback Hosts'}
-                        icon={'shuffle'}
-                        variant={'danger'}
-                        onClick={rollbackMutation}
-                        loading={rollbackPending}
-                        className={'ms-2'}
-                    />
+                    <FormActions>
+                        <SubmitButton label={'Add'} icon={'plus'} />
+                        <Button
+                            label={'Restart Service'}
+                            icon={'refresh-cw'}
+                            onClick={restartMutation}
+                            loading={restartPending}
+                        />
+                        <Button
+                            label={'Snapshot Hosts'}
+                            icon={'copy'}
+                            variant={'danger'}
+                            onClick={snapshotMutation}
+                            loading={snapshotPending}
+                        />
+                        <Button
+                            label={'Rollback Hosts'}
+                            icon={'shuffle'}
+                            variant={'danger'}
+                            onClick={rollbackMutation}
+                            loading={rollbackPending}
+                        />
+                    </FormActions>
                 </FormProvider>
             ) : (
                 <SkeletonTable
