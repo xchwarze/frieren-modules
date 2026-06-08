@@ -8,7 +8,6 @@ import { useState } from 'react';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import Collapse from 'react-bootstrap/Collapse';
-import BaseButton from 'react-bootstrap/Button';
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
@@ -184,15 +183,14 @@ const SearchCard = () => {
                 </Row>
 
                 <div>
-                    <BaseButton
+                    <Button
                         variant={'link'}
                         size={'sm'}
                         className={'p-0'}
                         aria-expanded={showAdvanced}
                         onClick={() => setShowAdvanced((prev) => !prev)}
-                    >
-                        {showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}
-                    </BaseButton>
+                        label={showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}
+                    />
                 </div>
                 <Collapse in={showAdvanced}>
                     <div>
@@ -278,14 +276,13 @@ const SearchCard = () => {
                                     <tr key={result.netid}>
                                         <td>{result.ssid}</td>
                                         <td>
-                                            <BaseButton
+                                            <Button
                                                 variant={'link'}
                                                 size={'sm'}
                                                 className={'p-0 font-monospace'}
                                                 onClick={() => handleShowDetail(result.netid)}
-                                            >
-                                                {result.netid}
-                                            </BaseButton>
+                                                label={result.netid}
+                                            />
                                         </td>
                                         <td>{result.channel}</td>
                                         <td>{result.encryption}</td>
