@@ -2,7 +2,7 @@
   "title": "WiGLE",
   "name": "wigle",
   "description": "WiFi network lookup via WiGLE.net database",
-  "icon": "wifi",
+  "icon": "icon.png",
   "author": {
     "name": "DSR!",
     "email": "xchwarze@gmail.com"

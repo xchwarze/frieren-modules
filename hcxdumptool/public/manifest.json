@@ -2,7 +2,7 @@
   "title": "hcxdumptool",
   "name": "hcxdumptool",
   "description": "WiFi handshake capture using hcxdumptool",
-  "icon": "radio",
+  "icon": "icon.png",
   "author": {
     "name": "DSR!",
     "email": "xchwarze@gmail.com"
