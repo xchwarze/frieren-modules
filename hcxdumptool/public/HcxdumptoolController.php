@@ -9,14 +9,27 @@
 namespace frieren\modules\hcxdumptool;
 
 use frieren\helper\OpenWrtHelper;
+use frieren\helper\BackgroundTaskHelper;
 
 class HcxdumptoolController extends \frieren\core\Controller
 {
+    // Single background-task slot for the diagnostic info commands (-L / -C / -I /
+    // --check_driver). They probe hardware and can be slow or hang, so they run via
+    // BackgroundTaskHelper (start + poll getInfoStatus) instead of blocking a worker.
+    const TASK_INFO = 'hcxdumptool-info';
+
+    // User-saved capture presets, stored in the plugin's own folder. Built-in
+    // presets ship in the frontend; only operator-created ones are stored here.
+    const PRESETS_FILE = 'presets.json';
+    const MAX_PRESETS = 50;
+    const PRESET_NAME_REGEX = '/^[A-Za-z0-9 ._+()-]{1,40}$/';
+
     private $pcapDirectory = '/root/.hcxdumptool';
     private $logPath = '/tmp/fm-hcxdumptool.log';
     private $filterApPath = '/tmp/fm-hcxdumptool-filter-ap.txt';
     private $filterClientPath = '/tmp/fm-hcxdumptool-filter-client.txt';
     private $essidListPath = '/tmp/fm-hcxdumptool-essidlist.txt';
+    private $bpfPath = '/tmp/fm-hcxdumptool-bpf.txt';
 
     protected $endpointRoutes = [
         //'checkModuleDependencies' => true,
@@ -34,6 +47,11 @@ class HcxdumptoolController extends \frieren\core\Controller
         'showChannels' => true,
         'interfaceInfo' => true,
         'checkDriver' => true,
+        'getInfoStatus' => true,
+        'stopInfo' => true,
+        'getPresets' => true,
+        'savePreset' => true,
+        'deletePreset' => true,
     ];
 
     /**
@@ -67,19 +85,32 @@ class HcxdumptoolController extends \frieren\core\Controller
             return self::setError('No command provided');
         }
 
-        // Build optional list files from textarea content and append the matching flags.
+        // The capture command is built version-specific by the frontend; the
+        // multi-line list / BPF inputs are written to files here and the matching
+        // flag appended. --essidlist works on both 6.2.x and 6.3.x. MAC filter lists
+        // (--filterlist_ap/--filterlist_client + --filtermode) are 6.2.x-only; the
+        // 6.3 rewrite dropped soft filter lists, so on 6.3.x a compiled BPF (--bpf)
+        // replaces them. Append only the flags valid for the selected version so a
+        // stale textarea never injects a flag that aborts the run.
+        $toolBranch = $this->request['toolVersion'] ?? '6.3';
         $extraFlags = '';
-        if ($this->writeListFile($this->filterApPath, $this->request['filterlistAp'] ?? '')) {
-            $extraFlags .= ' --filterlist_ap=' . escapeshellarg($this->filterApPath);
-        }
-        if ($this->writeListFile($this->filterClientPath, $this->request['filterlistClient'] ?? '')) {
-            $extraFlags .= ' --filterlist_client=' . escapeshellarg($this->filterClientPath);
-        }
         if ($this->writeListFile($this->essidListPath, $this->request['essidList'] ?? '')) {
             $extraFlags .= ' --essidlist=' . escapeshellarg($this->essidListPath);
         }
+        if ($toolBranch === '6.2') {
+            if ($this->writeListFile($this->filterApPath, $this->request['filterlistAp'] ?? '')) {
+                $extraFlags .= ' --filterlist_ap=' . escapeshellarg($this->filterApPath);
+            }
+            if ($this->writeListFile($this->filterClientPath, $this->request['filterlistClient'] ?? '')) {
+                $extraFlags .= ' --filterlist_client=' . escapeshellarg($this->filterClientPath);
+            }
+        } else {
+            if ($this->writeListFile($this->bpfPath, $this->request['bpf'] ?? '')) {
+                $extraFlags .= ' --bpf=' . escapeshellarg($this->bpfPath);
+            }
+        }
 
-        $filename = date('Y-m-d\TH-i-s') . '.pcap';
+        $filename = date('Y-m-d\TH-i-s') . '.pcapng';
         $pcapFilePath = "{$this->pcapDirectory}/{$filename}";
         $command = escapeshellcmd($this->request['command']);
         OpenWrtHelper::execBackground("hcxdumptool {$command}{$extraFlags} -w {$pcapFilePath}", "{$this->logPath} 2>&1");
@@ -94,7 +125,7 @@ class HcxdumptoolController extends \frieren\core\Controller
         OpenWrtHelper::exec('killall -9 hcxdumptool');
 
         return self::setSuccess([
-            'success' => OpenWrtHelper::checkRunning('hcxdumptool')
+            'success' => OpenWrtHelper::checkRunning($this->pcapDirectory, true)
         ]);
     }
 
@@ -140,7 +171,7 @@ class HcxdumptoolController extends \frieren\core\Controller
         }
 
         return self::setSuccess([
-            'isRunning' => file_exists($this->logPath) && OpenWrtHelper::checkRunning('hcxdumptool'),
+            'isRunning' => file_exists($this->logPath) && OpenWrtHelper::checkRunning($this->pcapDirectory, true),
             'logContent' => file_get_contents($this->logPath)
         ]);
     }
@@ -180,6 +211,28 @@ class HcxdumptoolController extends \frieren\core\Controller
         return array_values(array_diff($interfaces, array('.', '..')));
     }
 
+    /**
+     * Parses `hcxdumptool --version` (e.g. "hcxdumptool 6.3.4 (C) 2024 ZeroBeat")
+     * into the full version + numeric major/minor. The 6.3.0 rewrite changed the
+     * CLI heavily, so the frontend uses the major.minor branch to pick the right
+     * flag set. Returns null when the tool is missing or the line can't be parsed.
+     *
+     * @return array{version:string, major:int, minor:int}|null
+     */
+    private function getToolVersion()
+    {
+        $output = OpenWrtHelper::exec('hcxdumptool --version 2>&1');
+        if ($output === false || !preg_match('/hcxdumptool\s+(\d+)\.(\d+)\.(\d+)/i', $output, $m)) {
+            return null;
+        }
+
+        return [
+            'version' => "{$m[1]}.{$m[2]}.{$m[3]}",
+            'major' => (int)$m[1],
+            'minor' => (int)$m[2],
+        ];
+    }
+
     public function moduleStatus()
     {
         // fix default folder
@@ -189,10 +242,16 @@ class HcxdumptoolController extends \frieren\core\Controller
 
         // this dependency can be installed by two different packages, so I simplify the default checkModuleDependencies() check
         if (OpenWrtHelper::commandExists('hcxdumptool')) {
+            $version = $this->getToolVersion();
+
             return self::setSuccess([
                 'hasDependencies' => true,
-                'isRunning' => file_exists($this->logPath) && OpenWrtHelper::checkRunning('hcxdumptool'),
+                'isRunning' => file_exists($this->logPath) && OpenWrtHelper::checkRunning($this->pcapDirectory, true),
                 'interfaces' => $this->getNetworkInterfaces(),
+                // Full version string + the major.minor branch the frontend uses to
+                // default the tool-version selector (6.2.x vs 6.3.x have different CLIs).
+                'toolVersion' => $version['version'] ?? null,
+                'toolBranch' => $version ? "{$version['major']}.{$version['minor']}" : null,
             ]);
         }
 
@@ -205,56 +264,186 @@ class HcxdumptoolController extends \frieren\core\Controller
         ]);
     }
 
+    /**
+     * True when the installed binary is the 6.3 rewrite (or newer), which dropped
+     * -C / --check_driver and changed -L/-I. Defaults to true (6.3.x) when the
+     * version cannot be parsed, since that is the current shipped baseline.
+     */
+    private function isRewriteCli()
+    {
+        $version = $this->getToolVersion();
+        if ($version === null) {
+            return true;
+        }
+
+        return $version['major'] > 6 || ($version['major'] === 6 && $version['minor'] >= 3);
+    }
+
+    /**
+     * Launches an info/diagnostic command as the single TASK_INFO background task
+     * and returns immediately. The frontend polls getInfoStatus for {completed,
+     * output}. No `2>&1` here — BackgroundTaskHelper captures stdout+stderr.
+     */
+    private function startInfoTask($command)
+    {
+        BackgroundTaskHelper::start(self::TASK_INFO, $command);
+
+        return self::setSuccess(['started' => true]);
+    }
+
     public function listInterfaces()
     {
-        $output = OpenWrtHelper::exec('hcxdumptool -L 2>&1');
+        // 6.3.x lists interfaces with -L; 6.2.x had no -L — the no-arg -I was the list.
+        $flag = $this->isRewriteCli() ? '-L' : '-I';
 
-        return self::setSuccess([
-            'output' => $output !== false ? trim($output) : '',
-        ]);
+        return $this->startInfoTask("hcxdumptool {$flag}");
     }
 
     public function showChannels()
     {
-        $interface = $this->request['interface'] ?? '';
-        $command = 'hcxdumptool -C 2>&1';
-        if (!empty($interface)) {
-            $command = 'hcxdumptool -i ' . escapeshellarg($interface) . ' -C 2>&1';
+        // -C was removed in the 6.3 rewrite; surface a clear message instead of an
+        // abort. On 6.3.x channel/band capability is part of -I <iface> (Interface Info).
+        if ($this->isRewriteCli()) {
+            return self::setError('Show channels (-C) was removed in hcxdumptool 6.3.x. Use "Interface Info" (-I) instead.');
         }
 
-        $output = OpenWrtHelper::exec($command);
+        $interface = $this->request['interface'] ?? '';
+        $command = !empty($interface)
+            ? 'hcxdumptool -i ' . escapeshellarg($interface) . ' -C'
+            : 'hcxdumptool -C';
 
-        return self::setSuccess([
-            'output' => $output !== false ? trim($output) : '',
-        ]);
+        return $this->startInfoTask($command);
     }
 
     public function interfaceInfo()
     {
+        // 6.3.x: -I <iface> shows detailed per-interface info. 6.2.x: -I is the no-arg
+        // interface list, so there is no per-interface info command there.
+        if (!$this->isRewriteCli()) {
+            return self::setError('Per-interface info (-I <iface>) requires hcxdumptool 6.3.x. On 6.2.x use "List Interfaces" / "Show Channels".');
+        }
+
         $interface = $this->request['interface'] ?? '';
         if (empty($interface)) {
             return self::setError('No interface provided');
         }
 
-        $output = OpenWrtHelper::exec('hcxdumptool -I ' . escapeshellarg($interface) . ' 2>&1');
-
-        return self::setSuccess([
-            'output' => $output !== false ? trim($output) : '',
-        ]);
+        return $this->startInfoTask('hcxdumptool -I ' . escapeshellarg($interface));
     }
 
     public function checkDriver()
     {
-        $interface = $this->request['interface'] ?? '';
-        $command = 'hcxdumptool --check_driver 2>&1';
-        if (!empty($interface)) {
-            $command = 'hcxdumptool -i ' . escapeshellarg($interface) . ' --check_driver 2>&1';
+        // --check_driver was removed in the 6.3 rewrite (nl80211 dropped the ioctl test).
+        if ($this->isRewriteCli()) {
+            return self::setError('Driver check (--check_driver) was removed in hcxdumptool 6.3.x.');
         }
 
-        $output = OpenWrtHelper::exec($command);
+        $interface = $this->request['interface'] ?? '';
+        $command = !empty($interface)
+            ? 'hcxdumptool -i ' . escapeshellarg($interface) . ' --check_driver'
+            : 'hcxdumptool --check_driver';
 
-        return self::setSuccess([
-            'output' => $output !== false ? trim($output) : '',
-        ]);
+        return $this->startInfoTask($command);
+    }
+
+    /**
+     * Polls the diagnostic info task: {completed: bool, output: string}.
+     */
+    public function getInfoStatus()
+    {
+        return self::setSuccess(BackgroundTaskHelper::getStatus(self::TASK_INFO));
+    }
+
+    /**
+     * Stops a running diagnostic command. NOTE: diagnostics and captures are both
+     * hcxdumptool processes, so this also stops a running capture — the two never run
+     * at once on the same radio anyway. The task wrapper still touches its completion
+     * flag after the kill, so getInfoStatus resolves with whatever output was produced.
+     */
+    public function stopInfo()
+    {
+        OpenWrtHelper::exec('killall -9 hcxdumptool');
+
+        return self::setSuccess(['success' => true]);
+    }
+
+    /* --- Capture presets (operator-saved, device-persistent JSON) --- */
+
+    private function presetsPath()
+    {
+        return self::getModulePath() . '/' . self::PRESETS_FILE;
+    }
+
+    private function readPresets()
+    {
+        $path = $this->presetsPath();
+        if (!file_exists($path)) {
+            return [];
+        }
+        $decoded = json_decode(file_get_contents($path), true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
+    }
+
+    private function writePresets($presets)
+    {
+        // The plugin folder already exists (module is installed), so no mkdir.
+        return file_put_contents($this->presetsPath(), json_encode(array_values($presets), JSON_PRETTY_PRINT)) !== false;
+    }
+
+    public function getPresets()
+    {
+        return self::setSuccess(['presets' => $this->readPresets()]);
+    }
+
+    public function savePreset()
+    {
+        $name = $this->request['name'] ?? '';
+        if (!is_string($name) || !preg_match(self::PRESET_NAME_REGEX, $name)) {
+            return self::setError('Invalid preset name (1-40 chars: letters, digits, space, _ -).');
+        }
+
+        $values = $this->request['values'] ?? null;
+        if (!is_array($values)) {
+            return self::setError('Invalid preset values');
+        }
+
+        $toolVersion = $this->request['toolVersion'] ?? '6.3';
+        if (!in_array($toolVersion, ['6.2', '6.3'], true)) {
+            return self::setError('Invalid tool version');
+        }
+
+        // Upsert by name (overwrite an existing same-named preset).
+        $presets = array_values(array_filter($this->readPresets(), function ($preset) use ($name) {
+            return ($preset['name'] ?? '') !== $name;
+        }));
+        if (count($presets) >= self::MAX_PRESETS) {
+            return self::setError('Preset limit reached (' . self::MAX_PRESETS . ').');
+        }
+        $presets[] = ['name' => $name, 'toolVersion' => $toolVersion, 'values' => $values];
+
+        if (!$this->writePresets($presets)) {
+            return self::setError('Failed to save preset');
+        }
+
+        return self::setSuccess(['presets' => $presets]);
+    }
+
+    public function deletePreset()
+    {
+        $name = $this->request['name'] ?? '';
+        if (!is_string($name) || $name === '') {
+            return self::setError('Invalid preset name');
+        }
+
+        $presets = array_values(array_filter($this->readPresets(), function ($preset) use ($name) {
+            return ($preset['name'] ?? '') !== $name;
+        }));
+
+        if (!$this->writePresets($presets)) {
+            return self::setError('Failed to delete preset');
+        }
+
+        return self::setSuccess(['presets' => $presets]);
     }
 }

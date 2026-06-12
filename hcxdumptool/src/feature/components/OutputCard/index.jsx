@@ -30,6 +30,7 @@ const OutputCard = () => {
     return (
         <PanelCard
             title={'Output'}
+            icon={'terminal'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >

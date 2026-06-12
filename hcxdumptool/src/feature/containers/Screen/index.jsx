@@ -36,7 +36,7 @@ const Screen = () => {
             )}
 
             <PanelTabs id={'hcxdumptool'} defaultTab={'capture'}>
-                <Tab eventKey={'capture'} title={<TabTitle title={'Capture'} icon={'radio'} />}>
+                <Tab eventKey={'capture'} title={<TabTitle title={'Capture'} icon={'activity'} />}>
                     <ConditionalTabContent id={'hcxdumptool'} eventKey={'capture'}>
                         <PanelStack>
                             <SettingsCard statusQuery={statusQuery} />

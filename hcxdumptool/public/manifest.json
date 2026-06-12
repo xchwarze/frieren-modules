@@ -1,7 +1,7 @@
 {
   "title": "hcxdumptool",
   "name": "hcxdumptool",
-  "description": "WiFi handshake capture using hcxdumptool",
+  "description": "WiFi handshake/PMKID capture and recon via hcxdumptool",
   "icon": "icon.png",
   "author": {
     "name": "DSR!",
@@ -22,5 +22,5 @@
   ],
   "system": false,
   "forceSidebar": false,
-  "version": "1.0.1"
+  "version": "1.0.2"
 }

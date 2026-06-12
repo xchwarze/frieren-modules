@@ -9,3 +9,5 @@ export const HCXDUMPTOOL_GET_MODULE_STATUS = 'hcxdumptool-get-module-status';
 export const HCXDUMPTOOL_GET_LOG_CONTENT = 'hcxdumptool-get-log-content';
 export const HCXDUMPTOOL_GET_CAPTURE_HISTORY = 'hcxdumptool-get-capture-history';
 export const HCXDUMPTOOL_INFO_OUTPUT = 'hcxdumptool-info-output';
+export const HCXDUMPTOOL_GET_INFO_STATUS = 'hcxdumptool-get-info-status';
+export const HCXDUMPTOOL_GET_PRESETS = 'hcxdumptool-get-presets';

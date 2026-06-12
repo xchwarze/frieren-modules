@@ -9,6 +9,7 @@ import { useState, useMemo } from 'react';
 import PanelCard from '@src/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
+import ConfirmationModal from '@common/components/ConfirmationModal';
 import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import TablePagination from '@src/components/TablePagination';
@@ -40,6 +41,8 @@ const CaptureHistory = () => {
     }, [data, debouncedSearch]);
 
     const { pageData, currentPage, totalPages, setCurrentPage } = usePagination(filteredFiles);
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const [showDeleteAll, setShowDeleteAll] = useState(false);
 
     const handleDownloadClick = (item) => {
         downloadCapture({
@@ -47,15 +50,10 @@ const CaptureHistory = () => {
         });
     };
 
-    const handleDeleteClick = (item) => {
-        deleteHistory({
-            filename: item,
-        });
-    };
-
     return (
         <PanelCard
             title={'History'}
+            icon={'clock'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
@@ -82,17 +80,17 @@ const CaptureHistory = () => {
                                         <td>
                                             <ActionButtons>
                                                 <Button
-                                                    label={'Download'}
                                                     icon={'download'}
-                                                    loading={downloadCaptureRunning}
+                                                    title={'Download'}
+                                                    size={'sm'}
                                                     onClick={() => handleDownloadClick(item)}
                                                 />
                                                 <Button
-                                                    label={'Delete'}
                                                     icon={'trash-2'}
-                                                    variant={'danger'}
-                                                    loading={deleteHistoryRunning}
-                                                    onClick={() => handleDeleteClick(item)}
+                                                    title={'Delete'}
+                                                    variant={'outline-danger'}
+                                                    size={'sm'}
+                                                    onClick={() => setPendingDelete(item)}
                                                 />
                                             </ActionButtons>
                                         </td>
@@ -119,9 +117,30 @@ const CaptureHistory = () => {
                             icon={'trash-2'}
                             variant={'danger'}
                             loading={deleteAllRunning}
-                            onClick={deleteAll}
+                            disabled={filteredFiles.length === 0}
+                            onClick={() => setShowDeleteAll(true)}
                         />
                     </FormActions>
+
+                    <ConfirmationModal
+                        show={pendingDelete !== null}
+                        onHide={() => setPendingDelete(null)}
+                        onConfirm={() => deleteHistory(
+                            { filename: pendingDelete },
+                            { onSettled: () => setPendingDelete(null) }
+                        )}
+                        title={'Delete capture'}
+                        description={`Delete "${pendingDelete}"? This cannot be undone.`}
+                        isConfirmLoading={deleteHistoryRunning}
+                    />
+                    <ConfirmationModal
+                        show={showDeleteAll}
+                        onHide={() => setShowDeleteAll(false)}
+                        onConfirm={() => deleteAll(undefined, { onSettled: () => setShowDeleteAll(false) })}
+                        title={'Delete all captures'}
+                        description={'Delete every capture file in the history? This cannot be undone.'}
+                        isConfirmLoading={deleteAllRunning}
+                    />
                 </>
             ) : (
                 <SkeletonTable

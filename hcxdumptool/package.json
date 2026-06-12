@@ -1,6 +1,6 @@
 {
   "name": "hcxdumptool",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "WiFi handshake capture using hcxdumptool",
   "license": "LGPL-3.0-only",
   "type": "module",

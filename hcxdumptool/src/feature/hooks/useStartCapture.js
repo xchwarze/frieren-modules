@@ -15,13 +15,15 @@ const useStartCapture = () => {
     const setIsRunning = useSetAtom(isRunningAtom);
 
     return useAuthenticatedMutation({
-        mutationFn: ({ command, filterlistAp, filterlistClient, essidList }) => fetchPost({
+        mutationFn: ({ command, toolVersion, filterlistAp, filterlistClient, essidList, bpf }) => fetchPost({
             module: 'hcxdumptool',
             action: 'startCapture',
             command,
+            toolVersion,
             filterlistAp,
             filterlistClient,
             essidList,
+            bpf,
         }),
         onSuccess: async () => {
             await sleep(600);
