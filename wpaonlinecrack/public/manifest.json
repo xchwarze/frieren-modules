@@ -1,5 +1,5 @@
 {
-  "title": "WPA Online Crack",
+  "title": "WPA Crack",
   "name": "wpaonlinecrack",
   "description": "Automates wpa hash cracking through online services",
   "icon": "icon.png",
@@ -22,5 +22,5 @@
   ],
   "system": false,
   "forceSidebar": false,
-  "version": "1.1.1"
+  "version": "1.1.2"
 }
