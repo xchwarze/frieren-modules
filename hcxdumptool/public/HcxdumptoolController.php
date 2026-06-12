@@ -30,6 +30,7 @@ class HcxdumptoolController extends \frieren\core\Controller
     private $filterClientPath = '/tmp/fm-hcxdumptool-filter-client.txt';
     private $essidListPath = '/tmp/fm-hcxdumptool-essidlist.txt';
     private $bpfPath = '/tmp/fm-hcxdumptool-bpf.txt';
+    private $runScriptPath = '/tmp/fm-hcxdumptool-run.sh';
 
     protected $endpointRoutes = [
         //'checkModuleDependencies' => true,
@@ -113,7 +114,18 @@ class HcxdumptoolController extends \frieren\core\Controller
         $filename = date('Y-m-d\TH-i-s') . '.pcapng';
         $pcapFilePath = "{$this->pcapDirectory}/{$filename}";
         $command = escapeshellcmd($this->request['command']);
-        OpenWrtHelper::execBackground("hcxdumptool {$command}{$extraFlags} -w {$pcapFilePath}", "{$this->logPath} 2>&1");
+
+        // Run via a launcher script that APPENDS (>>) to the log. getLogContent
+        // drains the log (read + truncate) every poll to keep the tmpfs file tiny
+        // (--rds repaints continuously and would grow it unbounded); append mode
+        // makes the writer resume at offset 0 after each drain instead of leaving
+        // sparse gaps. The launcher keeps the redirect out of inline shell quoting.
+        file_put_contents($this->logPath, '');
+        file_put_contents(
+            $this->runScriptPath,
+            "#!/bin/sh\nhcxdumptool {$command}{$extraFlags} -w {$pcapFilePath} >> {$this->logPath} 2>&1\n"
+        );
+        OpenWrtHelper::execBackground('sh ' . escapeshellarg($this->runScriptPath));
 
         return self::setSuccess([
             'outputFile' => $filename
@@ -170,9 +182,24 @@ class HcxdumptoolController extends \frieren\core\Controller
             return self::setError("Could not find log output: {$this->logPath}");
         }
 
+        // Drain: read whatever the capture has written, then truncate so the tmpfs
+        // log stays tiny. hcxdumptool's --rds repaints continuously (cursor-control
+        // escapes) and would otherwise grow the in-RAM log without bound. The writer
+        // runs in append mode, so it resumes writing at offset 0 after the truncate;
+        // the frontend just appends each chunk to the xterm viewer (frames repaint).
+        // Single r+ handle (read+truncate on one fd) keeps the read/truncate window
+        // minimal and saves an extra open()/close() per poll vs file_get/put_contents.
+        $chunk = '';
+        $handle = fopen($this->logPath, 'r+');
+        if ($handle !== false) {
+            $chunk = stream_get_contents($handle);
+            ftruncate($handle, 0);
+            fclose($handle);
+        }
+
         return self::setSuccess([
-            'isRunning' => file_exists($this->logPath) && OpenWrtHelper::checkRunning($this->pcapDirectory, true),
-            'logContent' => file_get_contents($this->logPath)
+            'isRunning' => OpenWrtHelper::checkRunning($this->pcapDirectory, true),
+            'chunk' => $chunk,
         ]);
     }
 

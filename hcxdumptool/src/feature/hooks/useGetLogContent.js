@@ -12,6 +12,11 @@ import { fetchPost } from '@src/services/fetchService.js';
 import isRunningAtom from '@module/feature/atoms/isRunningAtom.js';
 import { HCXDUMPTOOL_GET_LOG_CONTENT } from '@module/feature/helpers/queryKeys.js';
 
+// The backend drains the log each call (read + truncate), so every poll returns
+// only the new output. A short interval keeps the realtime display close to live
+// while the payload stays tiny (no growing log re-sent, no extra process).
+const POLL_INTERVAL_MS = 1000;
+
 const useGetLogContent = () => {
     const [isRunning, setIsRunning] = useAtom(isRunningAtom);
 
@@ -23,16 +28,16 @@ const useGetLogContent = () => {
         }),
         enabled: isRunning,
         staleTime: 0,
-        refetchInterval: 5000,
+        refetchInterval: POLL_INTERVAL_MS,
     });
 
     useEffect(() => {
         if (query.isSuccess && query.data.isRunning === false) {
-            setIsRunning(query.data.isRunning);
+            setIsRunning(false);
         }
     }, [query.data, query.isSuccess, query.dataUpdatedAt, setIsRunning]);
 
-    return query
+    return query;
 };
 
 export default useGetLogContent;

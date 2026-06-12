@@ -4,28 +4,21 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import { useEffect, useRef } from 'react';
-import Form from 'react-bootstrap/Form';
+import { useAtomValue } from 'jotai';
 
 import PanelCard from '@src/components/PanelCard';
 import FormActions from '@common/components/FormActions';
 import Button from '@src/components/Button';
+import LogView from '@src/components/LogView';
+import isRunningAtom from '@module/feature/atoms/isRunningAtom.js';
 import useGetLogContent from '@module/feature/hooks/useGetLogContent.js';
-import useDownloadCaptureOutput from "@module/feature/hooks/useDownloadCaptureOutput.js";
+import useDownloadCaptureOutput from '@module/feature/hooks/useDownloadCaptureOutput.js';
 
 const OutputCard = () => {
     const query = useGetLogContent();
+    const isRunning = useAtomValue(isRunningAtom);
     const { mutate: downloadCapture, isPending: downloadCaptureRunning } = useDownloadCaptureOutput();
-    const { logContent } = query?.data ?? {};
-    const resume = logContent ?? 'No capture output to display.';
-
-    const textareaRef = useRef(null);
-    useEffect(() => {
-        if (textareaRef.current) {
-            const textarea = textareaRef.current;
-            textarea.scrollTop = textarea.scrollHeight;
-        }
-    }, [resume]);
+    const { chunk = '' } = query?.data ?? {};
 
     return (
         <PanelCard
@@ -34,22 +27,13 @@ const OutputCard = () => {
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
-            <Form.Group className={'mb-3'}>
-                <Form.Control
-                    ref={textareaRef}
-                    as={'textarea'}
-                    rows={6}
-                    readOnly={true}
-                    value={resume}
-                    className={'text-body-secondary'}
-                />
-            </Form.Group>
+            <LogView chunk={chunk} tick={query.dataUpdatedAt} clearSignal={isRunning} />
             <FormActions>
                 <Button
                     label={'Download'}
                     icon={'download'}
                     variant={'secondary'}
-                    disabled={logContent === undefined}
+                    disabled={!query.isSuccess}
                     loading={downloadCaptureRunning}
                     onClick={downloadCapture}
                 />

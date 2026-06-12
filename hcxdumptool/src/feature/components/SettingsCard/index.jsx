@@ -331,7 +331,7 @@ const PresetBar = ({ toolVersion, onToolVersionChange }) => {
     };
 
     return (
-        <Row className={'g-3 align-items-end mb-3'}>
+        <Row className={'g-3 align-items-end mb-4'}>
             <Col xs={12} sm={5} md={4}>
                 <Form.Group>
                     <Form.Label><span className={'me-1'}><Icon name={'bookmark'} /></span>Preset</Form.Label>

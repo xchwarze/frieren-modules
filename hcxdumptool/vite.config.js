@@ -28,7 +28,8 @@ const EXTERNAL_DEPS = [
   'react-hook-form',
   'react-toastify',
   'wouter',
-  'yup'
+  'yup',
+  '@frieren/terminal-core'
 ];
 
 const GLOBALS_MAP = {
@@ -46,7 +47,8 @@ const GLOBALS_MAP = {
   'react-hook-form': 'Frieren.ReactHookForm',
   'react-toastify': 'Frieren.ReactToastify',
   'wouter': 'Frieren.Wouter',
-  'yup': 'Frieren.Yup'
+  'yup': 'Frieren.Yup',
+  '@frieren/terminal-core': 'Frieren.TerminalCore'
 };
 
 /**
