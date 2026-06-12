@@ -15,11 +15,12 @@ const useSetSettings = () => {
     const queryClient = useQueryClient();
 
     return useAuthenticatedMutation({
-        mutationFn: ({ wpaSecKey, onlinehashcrackEmail }) => fetchPost({
+        mutationFn: ({ wpaSecKey, onlinehashcrackEmail, searchPaths }) => fetchPost({
             module: 'wpaonlinecrack',
             action: 'setSettings',
             'wpaSecKey': wpaSecKey,
             'onlinehashcrackEmail': onlinehashcrackEmail,
+            'searchPaths': searchPaths,
         }),
         onSuccess: async () => {
             toast.success('Settings saved successfully');

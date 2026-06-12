@@ -23,6 +23,11 @@ class WpaonlinecrackController extends \frieren\core\Controller
 
     const REPORT_PATH = '/tmp/fm-wpaonlinecrack-report.json';
 
+    // Always scanned for captures. hcxdumptool stores its handshakes under
+    // /root/.hcxdumptool, so /root is the sane default; operators add more folders
+    // via Settings (searchPaths).
+    const DEFAULT_SCAN_PATH = '/root';
+
     public function getSettings()
     {
         $config = self::getConfig();
@@ -30,6 +35,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
         return self::setSuccess([
             'wpaSecKey' => $config['wpaSecKey'] ?? '',
             'onlinehashcrackEmail' => $config['onlinehashcrackEmail'] ?? '',
+            'searchPaths' => self::getConfiguredPaths(),
         ]);
     }
 
@@ -38,17 +44,88 @@ class WpaonlinecrackController extends \frieren\core\Controller
         self::setConfig([
             'wpaSecKey' => $this->request['wpaSecKey'] ?? '',
             'onlinehashcrackEmail' => $this->request['onlinehashcrackEmail'] ?? '',
+            'searchPaths' => json_encode(self::sanitizePaths($this->request['searchPaths'] ?? [])),
         ]);
 
         return self::setSuccess();
     }
 
+    /**
+     * Operator-configured extra scan folders, decoded from the JSON-encoded UCI option.
+     *
+     * @return string[]
+     */
+    protected function getConfiguredPaths()
+    {
+        $config = self::getConfig();
+        if (empty($config['searchPaths'])) {
+            return [];
+        }
+
+        $decoded = json_decode($config['searchPaths'], true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
+    }
+
+    /**
+     * Keeps only absolute paths, rejecting empties, relative paths and traversal.
+     *
+     * @param mixed $paths
+     * @return string[]
+     */
+    protected function sanitizePaths($paths)
+    {
+        if (!is_array($paths)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach ($paths as $path) {
+            $path = trim((string) $path);
+            if ($path !== '' && $path[0] === '/' && strpos($path, '..') === false) {
+                $clean[] = $path;
+            }
+        }
+
+        return array_values(array_unique($clean));
+    }
+
+    /**
+     * Resolves the list of existing directories to scan: the default /root plus any
+     * configured folders, de-duplicated, order preserved.
+     *
+     * @return string[]
+     */
+    protected function getScanFolders()
+    {
+        $folders = array_merge([self::DEFAULT_SCAN_PATH], self::getConfiguredPaths());
+
+        $dirs = [];
+        foreach (array_unique($folders) as $folder) {
+            if (is_dir($folder)) {
+                $dirs[] = $folder;
+            }
+        }
+
+        return $dirs;
+    }
+
     public function getCapFiles()
     {
-        $modulesFolder = \DeviceConfig::MODULE_ROOT_FOLDER;
-        // command is fixed server-side — never run an arbitrary command from the request (RCE)
-        $command = "find -L {$modulesFolder} -type f \\( -name '*.cap' -o -name '*.pcap' -o -name '*.pcapng' -o -name '*.hccapx' \\) 2>&1";
-        $files = self::setupCoreHelper()::exec($command, false);
+        $folders = self::getScanFolders();
+        if (empty($folders)) {
+            return self::setSuccess([
+                'files' => [],
+            ]);
+        }
+
+        // Folder list is validated (existing dirs only) and each entry is escaped; the find
+        // pattern is fixed server-side — never run an arbitrary command from the request (RCE).
+        $pathArgs = implode(' ', array_map('escapeshellarg', $folders));
+        $command = "find -L {$pathArgs} -type f \\( -name '*.cap' -o -name '*.pcap' -o -name '*.pcapng' -o -name '*.hccapx' \\) 2>&1";
+        // raw=true: the command has globs/redirect/grouping and is already escapeshellarg'd per path;
+        // escapeshellcmd would corrupt find's \( \) grouping and the '*.cap' globs (matches nothing).
+        $files = self::setupCoreHelper()::exec($command, false, true);
         if ($files === false) {
             $files = [];
         }
@@ -167,8 +244,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
             return self::setError('No API key configured');
         }
 
-        $pingResult = self::setupCoreHelper()::exec('ping -c 1 -W 3 wpa-sec.stanev.org 2>&1');
-        if (strpos($pingResult, '1 received') === false && strpos($pingResult, '1 packets received') === false) {
+        if (!self::setupCoreHelper()::hasInternetConnection()) {
             return self::setError('No internet connection');
         }
 

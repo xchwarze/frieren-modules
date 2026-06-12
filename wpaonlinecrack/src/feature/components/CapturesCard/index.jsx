@@ -64,6 +64,7 @@ const CapturesCard = () => {
     return (
         <PanelCard
             title={'Captures'}
+            icon={'folder'}
             subtitle={'The selected captures will be sent to all the services that you have configured. The listed formats are: .cap .pcap .pcapng .hccapx'}
             refetch={refetch}
             isFetching={isFetching}

@@ -8,6 +8,8 @@ import { useState, useMemo } from 'react';
 
 import PanelCard from '@common/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
+import Button from '@common/components/Button';
+import FormActions from '@common/components/FormActions';
 import SearchInput from '@common/components/SearchInput';
 import TablePagination from '@common/components/TablePagination';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
@@ -17,7 +19,7 @@ import useCheckResults from '@module/feature/hooks/useCheckResults.js';
 
 const ResultsCard = () => {
     const query = useCheckResults();
-    const { data, isSuccess, isFetching, refetch } = query;
+    const { data, isFetching, isFetched, refetch } = query;
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebouncedValue(searchTerm);
 
@@ -39,18 +41,24 @@ const ResultsCard = () => {
     return (
         <PanelCard
             title={'Cracked Results'}
-            subtitle={'Networks cracked by WPA-Sec for your API key.'}
-            refetch={refetch}
-            isFetching={isFetching}
+            icon={'unlock'}
+            subtitle={'Retrieve the networks WPA-Sec has already cracked for your API key. Requires a WPA-Sec key in Settings.'}
+            showRefresh={false}
         >
-            {isSuccess ? (
-                <>
-                    <SearchInput
-                        value={searchTerm}
-                        onChange={setSearchTerm}
-                        placeholder={'Search results...'}
-                    />
+            <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder={'Search results...'}
+            />
 
+            {isFetching ? (
+                <SkeletonTable
+                    headers={['BSSID', 'ESSID', 'Password']}
+                    widths={[140, 140, 140]}
+                    rows={3}
+                />
+            ) : (
+                <>
                     <PanelTable>
                         <thead>
                         <tr>
@@ -70,7 +78,9 @@ const ResultsCard = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={3}>No cracked results yet.</td>
+                                <td colSpan={3}>
+                                    {isFetched ? 'No cracked results yet.' : 'Click "Check Results" to retrieve cracked networks.'}
+                                </td>
                             </tr>
                         )}
                         </tbody>
@@ -83,13 +93,16 @@ const ResultsCard = () => {
                         totalItems={filtered.length}
                     />
                 </>
-            ) : (
-                <SkeletonTable
-                    headers={['BSSID', 'ESSID', 'Password']}
-                    widths={[140, 140, 140]}
-                    rows={3}
-                />
             )}
+
+            <FormActions>
+                <Button
+                    label={'Check Results'}
+                    icon={'download-cloud'}
+                    loading={isFetching}
+                    onClick={() => refetch()}
+                />
+            </FormActions>
         </PanelCard>
     );
 };
