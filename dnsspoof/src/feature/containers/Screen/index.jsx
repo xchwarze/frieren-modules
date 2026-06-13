@@ -6,14 +6,14 @@
  */
 import * as yup from 'yup';
 
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import FormActions from '@common/components/FormActions';
 import SkeletonBar from '@src/components/SkeletonBar';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
-import Button from '@common/components/Button';
+import Button from '@src/components/Button';
 import useFetchHosts from '@module/feature/hooks/useFetchHosts';
 import useAddHost from '@module/feature/hooks/useAddHost';
 import useRestartService from '@module/feature/hooks/useRestartService';
@@ -42,6 +42,7 @@ const Screen = () => {
     return (
         <PanelCard
             title={'DNS Spoof'}
+            icon={'globe'}
             subtitle={'Manage your DNS spoofing settings.'}
             refetch={query.refetch}
             isFetching={query.isFetching}
@@ -68,7 +69,7 @@ const Screen = () => {
                         <SubmitButton label={'Add'} icon={'plus'} />
                         <Button
                             label={'Restart Service'}
-                            icon={'refresh-cw'}
+                            icon={'rotate-cw'}
                             onClick={restartMutation}
                             loading={restartPending}
                         />
