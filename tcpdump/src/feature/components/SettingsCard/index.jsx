@@ -43,11 +43,13 @@ const DEFAULT_VALUES = {
     // commands (command is derived by useGenerateCommand and shown read-only)
     command: '',
     interface: '',
+    direction: '',
     verbose: '',
     resolve: '',
     timestamp: '',
     packetCount: '',
     snaplen: '',
+    bufferSize: '',
 
     // filters (filter is derived by useGenerateFilter from the builder fields)
     filter: '',
@@ -65,6 +67,9 @@ const DEFAULT_VALUES = {
     printAbsoluteNumbers: false,
     getEthernetHeaders: false,
     noPromiscuous: false,
+    noChecksumVerify: false,
+    immediateMode: false,
+    packetNumber: false,
     lessProtocolInfo: false,
     monitorMode: false,
     extraFlags: '',
@@ -251,6 +256,18 @@ const SettingsCard = ({ statusQuery }) => {
                                 </Col>
                                 <Col md={6}>
                                     <SelectField
+                                        name={'direction'}
+                                        label={'Capture direction (-Q)'}
+                                        options={[
+                                            {value: '', label: 'Any (default)'},
+                                            {value: 'in', label: 'Inbound only'},
+                                            {value: 'out', label: 'Outbound only'},
+                                            {value: 'inout', label: 'Both (inout)'},
+                                        ]}
+                                    />
+                                </Col>
+                                <Col md={6}>
+                                    <SelectField
                                         name={'verbose'}
                                         label={'Verbose'}
                                         options={[
@@ -392,8 +409,12 @@ const SettingsCard = ({ statusQuery }) => {
                                 <Col md={6}><SwitchField name={'printAbsoluteNumbers'} label={'Print absolute sequence numbers (-S)'} /></Col>
                                 <Col md={6}><SwitchField name={'getEthernetHeaders'} label={'Get the ethernet header as well (-e)'} /></Col>
                                 <Col md={6}><SwitchField name={'noPromiscuous'} label={'Don\'t put interface in promiscuous mode (-p)'} /></Col>
+                                <Col md={6}><SwitchField name={'noChecksumVerify'} label={'Don\'t verify checksums (-K)'} /></Col>
+                                <Col md={6}><SwitchField name={'immediateMode'} label={'Immediate mode, no buffering (--immediate-mode)'} /></Col>
+                                <Col md={6}><SwitchField name={'packetNumber'} label={'Print packet number (--number)'} /></Col>
                                 <Col md={6}><SwitchField name={'lessProtocolInfo'} label={'Show less protocol information (-q)'} /></Col>
                                 <Col md={6}><SwitchField name={'monitorMode'} label={'Monitor mode (-I)'} /></Col>
+                                <Col md={6}><InputField name={'bufferSize'} label={'Capture buffer KiB (-B)'} type={'number'} placeholder={'e.g. 4096'} /></Col>
                                 <Col md={12}><InputField name={'extraFlags'} label={'Extra Flags'} placeholder={'Additional tcpdump flags'} /></Col>
                             </Row>
                         </Accordion.Body>
