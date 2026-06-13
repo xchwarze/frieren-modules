@@ -12,6 +12,12 @@ use frieren\helper\OpenWrtHelper;
 
 class TcpdumpController extends \frieren\core\Controller
 {
+    // User-saved capture presets, stored in the plugin's own folder. Built-in
+    // presets ship in the frontend; only operator-created ones are stored here.
+    const PRESETS_FILE = 'presets.json';
+    const MAX_PRESETS = 50;
+    const PRESET_NAME_REGEX = '/^[A-Za-z0-9 ._+()-]{1,40}$/';
+
     private $pcapDirectory = '/root/.tcpdump';
     private $logPath = '/tmp/fm-tcpdump.log';
 
@@ -27,6 +33,9 @@ class TcpdumpController extends \frieren\core\Controller
         'deleteCapture' => true,
         'deleteAll' => true,
         'moduleStatus' => true,
+        'getPresets' => true,
+        'savePreset' => true,
+        'deletePreset' => true,
     ];
 
     public function startCapture()
@@ -170,5 +179,80 @@ class TcpdumpController extends \frieren\core\Controller
             'internalAvailable' => (disk_free_space('/') > self::MIN_DISK_SPACE) && \DeviceConfig::MODULE_USE_INTERNAL_STORAGE,
             'SDAvailable' => OpenWrtHelper::isSDAvailable() && \DeviceConfig::MODULE_USE_USB_STORAGE,
         ]);
+    }
+
+    /* --- Capture presets (operator-saved, device-persistent JSON) --- */
+
+    private function presetsPath()
+    {
+        return self::getModulePath() . '/' . self::PRESETS_FILE;
+    }
+
+    private function readPresets()
+    {
+        $path = $this->presetsPath();
+        if (!file_exists($path)) {
+            return [];
+        }
+        $decoded = json_decode(file_get_contents($path), true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
+    }
+
+    private function writePresets($presets)
+    {
+        // The plugin folder already exists (module is installed), so no mkdir.
+        return file_put_contents($this->presetsPath(), json_encode(array_values($presets), JSON_PRETTY_PRINT)) !== false;
+    }
+
+    public function getPresets()
+    {
+        return self::setSuccess(['presets' => $this->readPresets()]);
+    }
+
+    public function savePreset()
+    {
+        $name = $this->request['name'] ?? '';
+        if (!is_string($name) || !preg_match(self::PRESET_NAME_REGEX, $name)) {
+            return self::setError('Invalid preset name (1-40 chars: letters, digits, space, _ -).');
+        }
+
+        $values = $this->request['values'] ?? null;
+        if (!is_array($values)) {
+            return self::setError('Invalid preset values');
+        }
+
+        // Upsert by name (overwrite an existing same-named preset).
+        $presets = array_values(array_filter($this->readPresets(), function ($preset) use ($name) {
+            return ($preset['name'] ?? '') !== $name;
+        }));
+        if (count($presets) >= self::MAX_PRESETS) {
+            return self::setError('Preset limit reached (' . self::MAX_PRESETS . ').');
+        }
+        $presets[] = ['name' => $name, 'values' => $values];
+
+        if (!$this->writePresets($presets)) {
+            return self::setError('Failed to save preset');
+        }
+
+        return self::setSuccess(['presets' => $presets]);
+    }
+
+    public function deletePreset()
+    {
+        $name = $this->request['name'] ?? '';
+        if (!is_string($name) || $name === '') {
+            return self::setError('Invalid preset name');
+        }
+
+        $presets = array_values(array_filter($this->readPresets(), function ($preset) use ($name) {
+            return ($preset['name'] ?? '') !== $name;
+        }));
+
+        if (!$this->writePresets($presets)) {
+            return self::setError('Failed to delete preset');
+        }
+
+        return self::setSuccess(['presets' => $presets]);
     }
 }

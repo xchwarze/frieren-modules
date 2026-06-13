@@ -9,8 +9,9 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 const useGenerateCommand = () => {
     const fields = [
-        'interface', 'verbose', 'resolve', 'timestamp', 'filter',
-        'dontPrintHostName', 'showHexAndASCII', 'printAbsoluteNumbers', 'getEthernetHeaders', 'lessProtocolInfo', 'monitorMode',
+        'interface', 'verbose', 'resolve', 'timestamp', 'packetCount', 'snaplen', 'filter',
+        'dontPrintHostName', 'showHexAndASCII', 'printAscii', 'printAbsoluteNumbers', 'getEthernetHeaders',
+        'noPromiscuous', 'lessProtocolInfo', 'monitorMode', 'extraFlags',
     ];
     const { getValues, setValue } = useFormContext();
     const watchFields = useWatch({ name: fields, exact: true });
@@ -19,11 +20,15 @@ const useGenerateCommand = () => {
         const form = fields.reduce((obj, field, index) => ({ ...obj, [field]: watchFields[index] }), {});
         const commandMap = {
             interface: value => `-i ${value}`,
+            packetCount: value => `-c ${value}`,
+            snaplen: value => `-s ${value}`,
             filter: value => `'${value}'`,
             dontPrintHostName: value => value ? '-N' : '',
             showHexAndASCII: value => value ? '-X' : '',
+            printAscii: value => value ? '-A' : '',
             printAbsoluteNumbers: value => value ? '-S' : '',
             getEthernetHeaders: value => value ? '-e' : '',
+            noPromiscuous: value => value ? '-p' : '',
             lessProtocolInfo: value => value ? '-q' : '',
             monitorMode: value => value ? '-I' : '',
         };
