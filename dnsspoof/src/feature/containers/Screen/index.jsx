@@ -75,14 +75,14 @@ const Screen = () => {
                         />
                         <Button
                             label={'Snapshot Hosts'}
-                            icon={'copy'}
-                            variant={'danger'}
+                            icon={'save'}
+                            variant={'secondary'}
                             onClick={snapshotMutation}
                             loading={snapshotPending}
                         />
                         <Button
                             label={'Rollback Hosts'}
-                            icon={'shuffle'}
+                            icon={'rotate-ccw'}
                             variant={'danger'}
                             onClick={rollbackMutation}
                             loading={rollbackPending}
