@@ -14,6 +14,8 @@ const useFetchHosts = () => useAuthenticatedQuery({
         module: 'dnsspoof',
         action: 'fetchHosts',
     }),
+    // Refetch on mount so re-entering the section shows current entries.
+    staleTime: 0,
 });
 
 export default useFetchHosts;

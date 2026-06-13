@@ -4,107 +4,173 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
+import { useState } from 'react';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
+import PanelTable from '@src/components/PanelTable';
+import ActionButtons from '@src/components/ActionButtons';
+import ConfirmationModal from '@src/components/ConfirmationModal';
 import FormActions from '@common/components/FormActions';
-import SkeletonBar from '@src/components/SkeletonBar';
+import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
-import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
 import Button from '@src/components/Button';
 import useFetchHosts from '@module/feature/hooks/useFetchHosts';
 import useAddHost from '@module/feature/hooks/useAddHost';
+import useDeleteHost from '@module/feature/hooks/useDeleteHost';
 import useRestartService from '@module/feature/hooks/useRestartService';
 import useCreateHostSnapshot from '@module/feature/hooks/useCreateHostSnapshot';
 import useRollbackHostsFromSnapshot from '@module/feature/hooks/useRollbackHostsFromSnapshot';
 
 const dnsSpoofSchema = yup.object({
     ip: yup.string().required('IP Address is mandatory'),
-    domain: yup.string().required('Domain is mandatory')
+    domain: yup.string().required('Domain is mandatory'),
 }).required();
+
+const defaultValues = {
+    ip: '',
+    domain: '',
+};
+
+// Loopback / system rows that live in the same /etc/hosts block but must never be
+// listed as deletable spoof entries.
+const SYSTEM_IPS = ['127.0.0.1', '127.0.1.1', '::1', '0.0.0.0'];
+
+// Parse the managed hosts block into spoof entries, dropping comments, blanks and
+// loopback/system rows so only operator-added spoofs are shown (and deletable).
+const parseSpoofEntries = (hostsStr) => (hostsStr ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => {
+        const [ip, ...rest] = line.split(/\s+/);
+
+        return { ip, domain: rest.join(' ') };
+    })
+    .filter((entry) => entry.ip && entry.domain && !SYSTEM_IPS.includes(entry.ip));
 
 const Screen = () => {
     const query = useFetchHosts();
     const { isSuccess } = query;
     const { mutateAsync: addHostMutation } = useAddHost();
-    const { mutateAsync: restartMutation, isPending: restartPending } = useRestartService();
-    const { mutateAsync: snapshotMutation, isPending: snapshotPending } = useCreateHostSnapshot();
-    const { mutateAsync: rollbackMutation, isPending: rollbackPending } = useRollbackHostsFromSnapshot();
+    const { mutate: deleteHost, isPending: deletePending } = useDeleteHost();
+    const { mutate: restartMutation, isPending: restartPending } = useRestartService();
+    const { mutate: snapshotMutation, isPending: snapshotPending } = useCreateHostSnapshot();
+    const { mutate: rollbackMutation, isPending: rollbackPending } = useRollbackHostsFromSnapshot();
 
-    const defaultValues = {
-        ip: '',
-        domain: '',
-        hosts: query?.data?.hosts ?? ''
-    };
+    const [pendingDelete, setPendingDelete] = useState(null);
+
+    const entries = parseSpoofEntries(query?.data?.hosts);
 
     return (
         <PanelCard
             title={'DNS Spoof'}
             icon={'globe'}
-            subtitle={'Manage your DNS spoofing settings.'}
+            subtitle={'Add or remove DNS spoofing entries served via dnsmasq.'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
-            {isSuccess ? (
-                <FormProvider schema={dnsSpoofSchema} onSubmit={addHostMutation} defaultValues={defaultValues}>
-                    <TextAreaField
-                        name={'hosts'}
-                        label={'Hosts file'}
-                        rows={6}
-                        readOnly={true}
+            <FormProvider schema={dnsSpoofSchema} onSubmit={addHostMutation} defaultValues={defaultValues}>
+                <Row className={'g-3'}>
+                    <Col md={6}>
+                        <InputField name={'ip'} label={'IP Address'} placeholder={'Enter IP address'} />
+                    </Col>
+                    <Col md={6}>
+                        <InputField name={'domain'} label={'Domain'} placeholder={'Enter domain'} />
+                    </Col>
+                </Row>
+                <FormActions>
+                    <SubmitButton label={'Add'} icon={'plus'} />
+                </FormActions>
+            </FormProvider>
+
+            <div className={'mt-4'}>
+                {isSuccess ? (
+                    <PanelTable>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>IP</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {entries.length > 0 ? (
+                                entries.map((entry) => (
+                                    <tr key={`${entry.ip}-${entry.domain}`}>
+                                        <td>{entry.domain}</td>
+                                        <td><code>{entry.ip}</code></td>
+                                        <td>
+                                            <ActionButtons>
+                                                <Button
+                                                    icon={'trash-2'}
+                                                    title={'Delete'}
+                                                    variant={'outline-danger'}
+                                                    size={'sm'}
+                                                    loading={deletePending}
+                                                    onClick={() => setPendingDelete(entry)}
+                                                />
+                                            </ActionButtons>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={3}>No spoof entries.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </PanelTable>
+                ) : (
+                    <SkeletonTable
+                        headers={['Domain', 'IP', 'Actions']}
+                        widths={[200, 140, 80]}
+                        rows={3}
                     />
-                    <InputField
-                        name={'ip'}
-                        label={'IP Address'}
-                        placeholder={'Enter IP address'}
+                )}
+
+                <div className={'d-flex flex-wrap gap-2 mt-3'}>
+                    <Button
+                        label={'Restart Service'}
+                        icon={'rotate-cw'}
+                        variant={'secondary'}
+                        onClick={restartMutation}
+                        loading={restartPending}
                     />
-                    <InputField
-                        name={'domain'}
-                        label={'Domain'}
-                        placeholder={'Enter domain'}
+                    <Button
+                        label={'Snapshot Hosts'}
+                        icon={'save'}
+                        variant={'secondary'}
+                        onClick={snapshotMutation}
+                        loading={snapshotPending}
                     />
-                    <FormActions>
-                        <SubmitButton label={'Add'} icon={'plus'} />
-                        <Button
-                            label={'Restart Service'}
-                            icon={'rotate-cw'}
-                            onClick={restartMutation}
-                            loading={restartPending}
-                        />
-                        <Button
-                            label={'Snapshot Hosts'}
-                            icon={'save'}
-                            variant={'secondary'}
-                            onClick={snapshotMutation}
-                            loading={snapshotPending}
-                        />
-                        <Button
-                            label={'Rollback Hosts'}
-                            icon={'rotate-ccw'}
-                            variant={'danger'}
-                            onClick={rollbackMutation}
-                            loading={rollbackPending}
-                        />
-                    </FormActions>
-                </FormProvider>
-            ) : (
-                <>
-                    <div className={'mb-3'}>
-                        <SkeletonBar width={500} height={132} barHeight={120} />
-                    </div>
-                    <div className={'mb-3'}>
-                        <SkeletonBar width={500} height={38} barHeight={32} />
-                    </div>
-                    <div className={'mb-3'}>
-                        <SkeletonBar width={500} height={38} barHeight={32} />
-                    </div>
-                    <div className={'d-flex justify-content-end gap-2'}>
-                        <SkeletonBar width={320} height={38} barHeight={32} />
-                    </div>
-                </>
-            )}
+                    <Button
+                        label={'Rollback Hosts'}
+                        icon={'rotate-ccw'}
+                        variant={'danger'}
+                        onClick={rollbackMutation}
+                        loading={rollbackPending}
+                    />
+                </div>
+            </div>
+
+            <ConfirmationModal
+                show={pendingDelete !== null}
+                onHide={() => setPendingDelete(null)}
+                onConfirm={() => deleteHost(
+                    { ip: pendingDelete.ip, domain: pendingDelete.domain },
+                    { onSettled: () => setPendingDelete(null) }
+                )}
+                title={'Delete spoof entry'}
+                description={pendingDelete
+                    ? `Remove "${pendingDelete.domain}" -> ${pendingDelete.ip}? Restart the service to apply.`
+                    : ''}
+                isConfirmLoading={deletePending}
+            />
         </PanelCard>
     );
 };
