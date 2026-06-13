@@ -57,6 +57,7 @@ const CaptureHistory = () => {
     return (
         <PanelCard
             title={'History'}
+            icon={'clock'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
@@ -83,15 +84,17 @@ const CaptureHistory = () => {
                                         <td>
                                             <ActionButtons>
                                                 <Button
-                                                    label={'Download'}
                                                     icon={'download'}
+                                                    title={'Download'}
+                                                    size={'sm'}
                                                     loading={downloadCaptureRunning}
                                                     onClick={() => handleDownloadClick(item)}
                                                 />
                                                 <Button
-                                                    label={'Delete'}
                                                     icon={'trash-2'}
-                                                    variant={'danger'}
+                                                    title={'Delete'}
+                                                    variant={'outline-danger'}
+                                                    size={'sm'}
                                                     loading={deleteHistoryRunning}
                                                     onClick={() => handleDeleteClick(item)}
                                                 />

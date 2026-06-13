@@ -30,19 +30,18 @@ const OutputCard = () => {
     return (
         <PanelCard
             title={'Output'}
+            icon={'terminal'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
-            <Form.Group className={'mb-3'}>
-                <Form.Control
-                    ref={textareaRef}
-                    as={'textarea'}
-                    rows={6}
-                    readOnly={true}
-                    value={resume}
-                    className={'text-body-secondary'}
-                />
-            </Form.Group>
+            <Form.Control
+                ref={textareaRef}
+                as={'textarea'}
+                rows={6}
+                readOnly={true}
+                value={resume}
+                className={'text-body-secondary'}
+            />
             <FormActions>
                 <Button
                     label={'Download'}
