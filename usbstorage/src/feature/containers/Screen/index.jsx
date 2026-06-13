@@ -38,7 +38,7 @@ const Screen = () => {
                         <ConfigCard />
                     </ConditionalTabContent>
                 </Tab>
-                <Tab eventKey={'setup'} title={<TabTitle title={'Setup'} icon={'settings'} />}>
+                <Tab eventKey={'setup'} title={<TabTitle title={'Setup'} icon={'tool'} />}>
                     <ConditionalTabContent id={'usbstorage'} eventKey={'setup'}>
                         <SetupCard />
                     </ConditionalTabContent>

@@ -11,8 +11,8 @@ import { useAtomValue } from 'jotai';
 import isRunningSetupAtom from '@module/feature/atoms/isRunningSetupAtom.js';
 import useStartAutoSetup from '@module/feature/hooks/useStartAutoSetup.js';
 import useGetAutoSetupStatus from '@module/feature/hooks/useGetAutoSetupStatus.js';
-import PanelCard from '@common/components/PanelCard';
-import Button from '@common/components/Button';
+import PanelCard from '@src/components/PanelCard';
+import Button from '@src/components/Button';
 import FormActions from '@common/components/FormActions';
 
 const SetupCard = () => {
@@ -34,21 +34,20 @@ const SetupCard = () => {
     return (
         <PanelCard
             title={'Setup device'}
+            icon={'tool'}
             subtitle={'If the auto setup process does not work in your case you must use the scripts in the bin folder of this module manually.\n' +
                 'Note that your device may need extra drivers to use this functionality and you should install them yourself!'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
-            <Form.Group className={'mb-3'}>
-                <Form.Control
-                    ref={textareaRef}
-                    as={'textarea'}
-                    rows={20}
-                    readOnly={true}
-                    value={resume}
-                    className={'text-body-secondary'}
-                />
-            </Form.Group>
+            <Form.Control
+                ref={textareaRef}
+                as={'textarea'}
+                rows={20}
+                readOnly={true}
+                value={resume}
+                className={'text-body-secondary'}
+            />
             <FormActions>
                 <Button
                     label={'Run auto setup'}

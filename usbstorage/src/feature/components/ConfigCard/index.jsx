@@ -7,7 +7,8 @@
 import { useEffect, useRef } from 'react';
 import * as yup from 'yup';
 
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import FormProvider from '@src/components/Form/FormProvider';
 import TextAreaField from '@src/components/Form/TextAreaField';
 import SubmitButton from '@src/components/Form/SubmitButton';
@@ -39,6 +40,7 @@ const ConfigCard = () => {
     return (
         <PanelCard
             title={'FSTAB Configuration'}
+            icon={'hard-drive'}
             subtitle={'Manage and configure system mount points through FSTAB settings.' +
                 'This interface allows you to view and update the filesystem table configuration, ensuring proper device and partition mounting on system startup.'}
             refetch={query.refetch}
@@ -52,7 +54,9 @@ const ConfigCard = () => {
                         label={'FSTAB Content'}
                         rows={20}
                     />
-                    <SubmitButton />
+                    <FormActions>
+                        <SubmitButton />
+                    </FormActions>
                 </FormProvider>
             ) : (
                 <>
