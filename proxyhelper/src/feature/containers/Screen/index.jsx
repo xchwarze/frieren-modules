@@ -23,7 +23,7 @@ const Screen = () => {
                     <ProxyCard />
                 </ConditionalTabContent>
             </Tab>
-            <Tab eventKey={'routing'} title={<TabTitle title={'Routing'} icon={'list'} />}>
+            <Tab eventKey={'routing'} title={<TabTitle title={'Routing'} icon={'layers'} />}>
                 <ConditionalTabContent id={'proxyhelper'} eventKey={'routing'}>
                     <PanelStack>
                         <PortsCard />

@@ -8,13 +8,13 @@ import { useState } from 'react';
 import * as yup from 'yup';
 import { useQueryClient } from '@tanstack/react-query';
 
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import FormActions from '@common/components/FormActions';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SubmitButton from '@src/components/Form/SubmitButton';
-import Button from '@common/components/Button';
+import Button from '@src/components/Button';
 import ConfirmationModal from '@src/components/ConfirmationModal';
 import useGetSettings from '@module/feature/hooks/useGetSettings.js';
 import useSaveSettings from '@module/feature/hooks/useSaveSettings.js';
@@ -81,6 +81,7 @@ const ProxyCard = () => {
     return (
         <PanelCard
             title={'Proxy Configuration'}
+            icon={'sliders'}
             subtitle={'Configure the proxy destination and ports to forward through iptables DNAT rules.'}
             refetch={settingsQuery.refetch}
             isFetching={settingsQuery.isFetching}

@@ -8,10 +8,11 @@ import { useState } from 'react';
 import Form from 'react-bootstrap/Form';
 import InputGroup from 'react-bootstrap/InputGroup';
 
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
+import ActionButtons from '@common/components/ActionButtons';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
-import Button from '@common/components/Button';
+import Button from '@src/components/Button';
 import ConfirmationModal from '@src/components/ConfirmationModal';
 import useGetForwardedPorts from '@module/feature/hooks/useGetForwardedPorts.js';
 import useGetSettings from '@module/feature/hooks/useGetSettings.js';
@@ -61,6 +62,7 @@ const PortsCard = () => {
     return (
         <PanelCard
             title={'Forwarded Ports'}
+            icon={'send'}
             subtitle={'View, add, and remove individual DNAT forwarding rules. Adding a port uses the saved proxy destination.'}
             refetch={query.refetch}
             isFetching={query.isFetching}
@@ -97,13 +99,16 @@ const PortsCard = () => {
                                 <td>{item.port}</td>
                                 <td>{item.destination}</td>
                                 <td>
-                                    <Button
-                                        label={'Delete'}
-                                        icon={'trash-2'}
-                                        variant={'danger'}
-                                        loading={deletePending}
-                                        onClick={() => setPendingDelete(item)}
-                                    />
+                                    <ActionButtons>
+                                        <Button
+                                            icon={'trash-2'}
+                                            title={'Delete'}
+                                            variant={'outline-danger'}
+                                            size={'sm'}
+                                            loading={deletePending}
+                                            onClick={() => setPendingDelete(item)}
+                                        />
+                                    </ActionButtons>
                                 </td>
                             </tr>
                         ))

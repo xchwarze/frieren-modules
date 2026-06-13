@@ -6,7 +6,7 @@
  */
 import Form from 'react-bootstrap/Form';
 
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
 import useGetNatRules from '@module/feature/hooks/useGetNatRules.js';
 
@@ -19,20 +19,19 @@ const RulesCard = () => {
     return (
         <PanelCard
             title={'Active NAT Rules'}
+            icon={'code'}
             subtitle={'Live output of "iptables -t nat -L -n -v". Use refresh to reload.'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
             {isSuccess ? (
-                <Form.Group>
-                    <Form.Control
-                        as={'textarea'}
-                        rows={12}
-                        readOnly={true}
-                        value={content}
-                        className={'text-body-secondary font-monospace'}
-                    />
-                </Form.Group>
+                <Form.Control
+                    as={'textarea'}
+                    rows={12}
+                    readOnly={true}
+                    value={content}
+                    className={'text-body-secondary font-monospace'}
+                />
             ) : (
                 <SkeletonTable
                     widths={[600]}

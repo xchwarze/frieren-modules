@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * More info at: https://github.com/xchwarze/frieren
  */
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
 import SkeletonTable from '@src/components/SkeletonBar/SkeletonTable';
-import Button from '@common/components/Button';
+import Button from '@src/components/Button';
 import useGetBackups from '@module/feature/hooks/useGetBackups.js';
 import useBackupFirewall from '@module/feature/hooks/useBackupFirewall.js';
 import useRestoreFirewall from '@module/feature/hooks/useRestoreFirewall.js';
@@ -32,6 +32,7 @@ const BackupsCard = () => {
     return (
         <PanelCard
             title={'Firewall Backups'}
+            icon={'archive'}
             subtitle={'Create, restore, and manage iptables firewall backups.'}
             refetch={query.refetch}
             isFetching={query.isFetching}
@@ -60,15 +61,17 @@ const BackupsCard = () => {
                                 <td>
                                     <ActionButtons>
                                         <Button
-                                            label={'Restore'}
                                             icon={'upload'}
+                                            title={'Restore'}
+                                            size={'sm'}
                                             loading={restorePending}
                                             onClick={() => handleRestore(item)}
                                         />
                                         <Button
-                                            label={'Delete'}
                                             icon={'trash-2'}
-                                            variant={'danger'}
+                                            title={'Delete'}
+                                            variant={'outline-danger'}
+                                            size={'sm'}
                                             loading={deletePending}
                                             onClick={() => handleDelete(item)}
                                         />
