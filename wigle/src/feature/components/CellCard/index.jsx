@@ -52,7 +52,7 @@ const CellCard = () => {
     };
 
     return (
-        <PanelCard title={'Cell Tower Search'} subtitle={'Search GSM/CDMA/LTE/5G cell towers for rogue base station detection'} showRefresh={false}>
+        <PanelCard title={'Cell Tower Search'} icon={'rss'} subtitle={'Search GSM/CDMA/LTE/5G cell towers for rogue base station detection'} showRefresh={false}>
             <FormProvider schema={searchSchema} onSubmit={search} defaultValues={defaultValues}>
                 <Row className={'g-3'}>
                     <Col md={3}>
@@ -92,8 +92,8 @@ const CellCard = () => {
             </FormProvider>
 
             {isSuccess && (
-                <>
-                    <p className={'text-body-secondary mt-3 mb-2'}>
+                <div className={'mt-4'}>
+                    <p className={'text-body-secondary mb-3'}>
                         Total results: {totalResults}
                     </p>
                     <PanelTable>
@@ -131,7 +131,7 @@ const CellCard = () => {
                         </tbody>
                     </PanelTable>
                     {searchAfter && (
-                        <div className={'d-flex justify-content-center mt-2'}>
+                        <div className={'d-flex justify-content-center mt-3'}>
                             <Button
                                 label={'Load More'}
                                 icon={'chevrons-down'}
@@ -141,7 +141,7 @@ const CellCard = () => {
                             />
                         </div>
                     )}
-                </>
+                </div>
             )}
         </PanelCard>
     );

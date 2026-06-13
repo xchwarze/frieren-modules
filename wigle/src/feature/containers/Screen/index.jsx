@@ -46,7 +46,7 @@ const Screen = () => {
                         <BluetoothCard />
                     </ConditionalTabContent>
                 </Tab>
-                <Tab eventKey={'cell'} title={<TabTitle title={'Cell'} icon={'radio'} />}>
+                <Tab eventKey={'cell'} title={<TabTitle title={'Cell'} icon={'rss'} />}>
                     <ConditionalTabContent id={'wigle'} eventKey={'cell'}>
                         <CellCard />
                     </ConditionalTabContent>
@@ -56,7 +56,7 @@ const Screen = () => {
                         <StatsCard />
                     </ConditionalTabContent>
                 </Tab>
-                <Tab eventKey={'settings'} title={<TabTitle title={'Settings'} icon={'settings'} />}>
+                <Tab eventKey={'settings'} title={<TabTitle title={'Settings'} icon={'sliders'} />}>
                     <ConditionalTabContent id={'wigle'} eventKey={'settings'}>
                         <SettingsCard />
                     </ConditionalTabContent>

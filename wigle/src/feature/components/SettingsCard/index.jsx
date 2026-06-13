@@ -29,6 +29,7 @@ const SettingsCard = () => {
     return (
         <PanelCard
             title={'Settings'}
+            icon={'key'}
             subtitle={'Enter your WiGLE encoded API token. Get it from wigle.net/account'}
             refetch={settingsQuery.refetch}
             isFetching={settingsQuery.isFetching}

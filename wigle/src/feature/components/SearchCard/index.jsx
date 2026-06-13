@@ -7,11 +7,12 @@
 import { useState } from 'react';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
-import Collapse from 'react-bootstrap/Collapse';
+import Accordion from 'react-bootstrap/Accordion';
 import * as yup from 'yup';
 
 import PanelCard from '@src/components/PanelCard';
 import PanelTable from '@src/components/PanelTable';
+import Icon from '@src/components/Icon';
 import FormProvider from '@src/components/Form/FormProvider';
 import InputField from '@src/components/Form/InputField';
 import SelectField from '@src/components/Form/SelectField';
@@ -109,7 +110,6 @@ const SearchCard = () => {
     const { mutate: search, data: searchData, variables: searchParams, isPending, isSuccess } = useSearch();
     const { mutate: fetchDetail, data: detailData, isPending: detailPending, reset: resetDetail } = useNetworkDetail();
     const [detailNetid, setDetailNetid] = useState(null);
-    const [showAdvanced, setShowAdvanced] = useState(false);
 
     const results = searchData?.results ?? [];
     const totalResults = searchData?.totalResults ?? 0;
@@ -136,106 +136,104 @@ const SearchCard = () => {
     };
 
     return (
-        <PanelCard title={'WiGLE Lookup'} showRefresh={false}>
+        <PanelCard title={'WiGLE Lookup'} icon={'wifi'} showRefresh={false}>
             <FormProvider schema={searchSchema} onSubmit={search} defaultValues={defaultValues}>
-                <Row className={'g-3'}>
-                    <Col md={6}>
-                        <InputField name={'ssid'} label={'SSID (exact)'} placeholder={'WiFi network name'} />
-                    </Col>
-                    <Col md={6}>
-                        <InputField name={'ssidlike'} label={'SSID (wildcard)'} placeholder={'% and _ wildcards'} />
-                    </Col>
-                    <Col md={6}>
-                        <InputField name={'mac'} label={'MAC Address'} placeholder={'AA:BB:CC:DD:EE:FF'} />
-                    </Col>
-                    <Col md={6}>
-                        <SelectField
-                            name={'encryption'}
-                            label={'Encryption'}
-                            options={[
-                                { value: '', label: 'Any' },
-                                { value: 'none', label: 'Open (none)' },
-                                { value: 'wep', label: 'WEP' },
-                                { value: 'wpa', label: 'WPA' },
-                                { value: 'wpa2', label: 'WPA2' },
-                                { value: 'wpa3', label: 'WPA3' },
-                            ]}
-                        />
-                    </Col>
-                    <Col md={6}>
-                        <InputField name={'country'} label={'Country Code'} placeholder={'US, DE, AR...'} />
-                    </Col>
-                    <Col md={6}>
-                        <InputField name={'city'} label={'City'} placeholder={'City name'} />
-                    </Col>
-                    <Col md={6}>
-                        <SelectField
-                            name={'resultsPerPage'}
-                            label={'Results per page'}
-                            options={[
-                                { value: '10', label: '10' },
-                                { value: '25', label: '25' },
-                                { value: '50', label: '50' },
-                                { value: '100', label: '100' },
-                            ]}
-                        />
-                    </Col>
-                </Row>
+                <Accordion defaultActiveKey={'criteria'} alwaysOpen={true}>
+                    <Accordion.Item eventKey={'criteria'}>
+                        <Accordion.Header><span className={'me-2'}><Icon name={'search'} /></span>Search Criteria</Accordion.Header>
+                        <Accordion.Body>
+                            <Row className={'g-3'}>
+                                <Col md={6}>
+                                    <InputField name={'ssid'} label={'SSID (exact)'} placeholder={'WiFi network name'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'ssidlike'} label={'SSID (wildcard)'} placeholder={'% and _ wildcards'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'mac'} label={'MAC Address'} placeholder={'AA:BB:CC:DD:EE:FF'} />
+                                </Col>
+                                <Col md={6}>
+                                    <SelectField
+                                        name={'encryption'}
+                                        label={'Encryption'}
+                                        options={[
+                                            { value: '', label: 'Any' },
+                                            { value: 'none', label: 'Open (none)' },
+                                            { value: 'wep', label: 'WEP' },
+                                            { value: 'wpa', label: 'WPA' },
+                                            { value: 'wpa2', label: 'WPA2' },
+                                            { value: 'wpa3', label: 'WPA3' },
+                                        ]}
+                                    />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'country'} label={'Country Code'} placeholder={'US, DE, AR...'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'city'} label={'City'} placeholder={'City name'} />
+                                </Col>
+                                <Col md={6}>
+                                    <SelectField
+                                        name={'resultsPerPage'}
+                                        label={'Results per page'}
+                                        options={[
+                                            { value: '10', label: '10' },
+                                            { value: '25', label: '25' },
+                                            { value: '50', label: '50' },
+                                            { value: '100', label: '100' },
+                                        ]}
+                                    />
+                                </Col>
+                            </Row>
+                        </Accordion.Body>
+                    </Accordion.Item>
 
-                <div>
-                    <Button
-                        variant={'link'}
-                        size={'sm'}
-                        className={'p-0'}
-                        aria-expanded={showAdvanced}
-                        onClick={() => setShowAdvanced((prev) => !prev)}
-                        label={showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}
-                    />
-                </div>
-                <Collapse in={showAdvanced}>
-                    <div>
-                        <Row className={'g-3 mt-0'}>
-                            <Col md={6}>
-                                <InputField name={'region'} label={'Region (state/province)'} placeholder={'e.g. California'} />
-                            </Col>
-                            <Col md={6}>
-                                <InputField name={'postalCode'} label={'Postal Code'} placeholder={'ZIP / postal code'} />
-                            </Col>
-                            <Col md={6}>
-                                <InputField name={'channel'} label={'Channel'} type={'number'} placeholder={'e.g. 6'} />
-                            </Col>
-                            <Col md={6}>
-                                <InputField name={'frequency'} label={'Frequency (MHz)'} type={'number'} placeholder={'e.g. 2437'} />
-                            </Col>
-                            <Col md={3}>
-                                <InputField name={'latrange1'} label={'Lat range 1'} type={'number'} placeholder={'min latitude'} />
-                            </Col>
-                            <Col md={3}>
-                                <InputField name={'latrange2'} label={'Lat range 2'} type={'number'} placeholder={'max latitude'} />
-                            </Col>
-                            <Col md={3}>
-                                <InputField name={'longrange1'} label={'Long range 1'} type={'number'} placeholder={'min longitude'} />
-                            </Col>
-                            <Col md={3}>
-                                <InputField name={'longrange2'} label={'Long range 2'} type={'number'} placeholder={'max longitude'} />
-                            </Col>
-                            <Col md={6}>
-                                <InputField name={'closestLat'} label={'Closest Latitude'} type={'number'} placeholder={'order by proximity'} />
-                            </Col>
-                            <Col md={6}>
-                                <InputField name={'closestLong'} label={'Closest Longitude'} type={'number'} placeholder={'order by proximity'} />
-                            </Col>
-                            <Col md={6}>
-                                <InputField name={'lastupdt'} label={'Last Updated (yyyyMMdd)'} placeholder={'e.g. 20260101'} />
-                            </Col>
-                            <Col md={6} className={'d-flex flex-column justify-content-end'}>
-                                <SwitchField name={'onlymine'} label={'Only my observations'} />
-                                <SwitchField name={'freenet'} label={'Free network only'} />
-                                <SwitchField name={'paynet'} label={'Pay network only'} />
-                            </Col>
-                        </Row>
-                    </div>
-                </Collapse>
+                    <Accordion.Item eventKey={'advanced'}>
+                        <Accordion.Header><span className={'me-2'}><Icon name={'filter'} /></span>Advanced Filters</Accordion.Header>
+                        <Accordion.Body>
+                            <Row className={'g-3'}>
+                                <Col md={6}>
+                                    <InputField name={'region'} label={'Region (state/province)'} placeholder={'e.g. California'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'postalCode'} label={'Postal Code'} placeholder={'ZIP / postal code'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'channel'} label={'Channel'} type={'number'} placeholder={'e.g. 6'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'frequency'} label={'Frequency (MHz)'} type={'number'} placeholder={'e.g. 2437'} />
+                                </Col>
+                                <Col md={3}>
+                                    <InputField name={'latrange1'} label={'Lat range 1'} type={'number'} placeholder={'min latitude'} />
+                                </Col>
+                                <Col md={3}>
+                                    <InputField name={'latrange2'} label={'Lat range 2'} type={'number'} placeholder={'max latitude'} />
+                                </Col>
+                                <Col md={3}>
+                                    <InputField name={'longrange1'} label={'Long range 1'} type={'number'} placeholder={'min longitude'} />
+                                </Col>
+                                <Col md={3}>
+                                    <InputField name={'longrange2'} label={'Long range 2'} type={'number'} placeholder={'max longitude'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'closestLat'} label={'Closest Latitude'} type={'number'} placeholder={'order by proximity'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'closestLong'} label={'Closest Longitude'} type={'number'} placeholder={'order by proximity'} />
+                                </Col>
+                                <Col md={6}>
+                                    <InputField name={'lastupdt'} label={'Last Updated (yyyyMMdd)'} placeholder={'e.g. 20260101'} />
+                                </Col>
+                                <Col md={6} className={'d-flex flex-column justify-content-end'}>
+                                    <SwitchField name={'onlymine'} label={'Only my observations'} />
+                                    <SwitchField name={'freenet'} label={'Free network only'} />
+                                    <SwitchField name={'paynet'} label={'Pay network only'} />
+                                </Col>
+                            </Row>
+                        </Accordion.Body>
+                    </Accordion.Item>
+                </Accordion>
 
                 <FormActions>
                     <SubmitButton label={'Search'} icon={'search'} loading={isPending} />
@@ -243,8 +241,8 @@ const SearchCard = () => {
             </FormProvider>
 
             {isSuccess && (
-                <>
-                    <p className={'text-body-secondary mt-3 mb-2'}>
+                <div className={'mt-4'}>
+                    <p className={'text-body-secondary mb-3'}>
                         Total results: {totalResults}
                         {' — '}
                         <a
@@ -312,7 +310,7 @@ const SearchCard = () => {
                         </tbody>
                     </PanelTable>
                     {searchAfter && (
-                        <div className={'d-flex justify-content-center mt-2'}>
+                        <div className={'d-flex justify-content-center mt-3'}>
                             <Button
                                 label={'Load More'}
                                 icon={'chevrons-down'}
@@ -322,7 +320,7 @@ const SearchCard = () => {
                             />
                         </div>
                     )}
-                </>
+                </div>
             )}
 
             <NetworkDetailModal

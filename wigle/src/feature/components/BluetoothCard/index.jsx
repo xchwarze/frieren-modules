@@ -48,7 +48,7 @@ const BluetoothCard = () => {
     };
 
     return (
-        <PanelCard title={'Bluetooth / BLE Search'} showRefresh={false}>
+        <PanelCard title={'Bluetooth / BLE Search'} icon={'bluetooth'} showRefresh={false}>
             <FormProvider schema={searchSchema} onSubmit={search} defaultValues={defaultValues}>
                 <Row className={'g-3'}>
                     <Col md={6}>
@@ -82,8 +82,8 @@ const BluetoothCard = () => {
             </FormProvider>
 
             {isSuccess && (
-                <>
-                    <p className={'text-body-secondary mt-3 mb-2'}>
+                <div className={'mt-4'}>
+                    <p className={'text-body-secondary mb-3'}>
                         Total results: {totalResults}
                     </p>
                     <PanelTable>
@@ -117,7 +117,7 @@ const BluetoothCard = () => {
                         </tbody>
                     </PanelTable>
                     {searchAfter && (
-                        <div className={'d-flex justify-content-center mt-2'}>
+                        <div className={'d-flex justify-content-center mt-3'}>
                             <Button
                                 label={'Load More'}
                                 icon={'chevrons-down'}
@@ -127,7 +127,7 @@ const BluetoothCard = () => {
                             />
                         </div>
                     )}
-                </>
+                </div>
             )}
         </PanelCard>
     );

@@ -17,6 +17,7 @@ const StatsCard = () => {
     return (
         <PanelCard
             title={'User Statistics'}
+            icon={'bar-chart'}
             subtitle={'Your WiGLE account stats — confirms API token is working'}
             refetch={query.refetch}
             isFetching={query.isFetching}
