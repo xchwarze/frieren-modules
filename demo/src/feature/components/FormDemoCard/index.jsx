@@ -7,6 +7,7 @@
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
 import PanelCard from '@common/components/PanelCard';
+import FormActions from '@common/components/FormActions';
 import FormProvider from '@common/components/Form/FormProvider';
 import InputField from '@common/components/Form/InputField';
 import SwitchField from '@common/components/Form/SwitchField';
@@ -34,11 +35,13 @@ const FormDemoCard = () => {
     };
 
     return (
-        <PanelCard title={'Form Demo'} showRefresh={false}>
+        <PanelCard title={'Form Demo'} icon={'edit-3'} showRefresh={false}>
             <FormProvider schema={schema} onSubmit={handleSubmit} defaultValues={defaultValues}>
                 <InputField name={'name'} label={'Name'} placeholder={'Enter a name'} />
                 <SwitchField name={'enabled'} label={'Enable feature'} />
-                <SubmitButton label={'Submit'} />
+                <FormActions>
+                    <SubmitButton label={'Submit'} />
+                </FormActions>
             </FormProvider>
         </PanelCard>
     );

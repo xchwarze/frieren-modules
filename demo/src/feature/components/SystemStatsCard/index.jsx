@@ -31,6 +31,7 @@ const SystemStatsCard = () => {
     return (
         <PanelCard
             title={'System Stats'}
+            icon={'activity'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
