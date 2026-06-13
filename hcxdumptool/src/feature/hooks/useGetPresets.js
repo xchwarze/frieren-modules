@@ -20,6 +20,7 @@ const useGetPresets = () => (
             module: 'hcxdumptool',
             action: 'getPresets',
         }),
+        staleTime: 0,
     })
 );
 
