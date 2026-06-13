@@ -7,7 +7,7 @@
 import { useEffect, useRef } from 'react';
 import Form from 'react-bootstrap/Form';
 
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import useGetLog from '@module/feature/hooks/getLog.js';
 
 const OutputCard = () => {
@@ -25,19 +25,18 @@ const OutputCard = () => {
     return (
         <PanelCard
             title={'Output'}
+            icon={'terminal'}
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
-            <Form.Group>
-                <Form.Control
-                    ref={textareaRef}
-                    as={'textarea'}
-                    rows={10}
-                    readOnly={true}
-                    value={resume}
-                    className={'text-body-secondary'}
-                />
-            </Form.Group>
+            <Form.Control
+                ref={textareaRef}
+                as={'textarea'}
+                rows={10}
+                readOnly={true}
+                value={resume}
+                className={'text-body-secondary'}
+            />
         </PanelCard>
     );
 };

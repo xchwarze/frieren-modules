@@ -15,10 +15,10 @@
  */
 
 import { useState, useMemo } from 'react';
-import PanelCard from '@common/components/PanelCard';
+import PanelCard from '@src/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import ActionButtons from '@common/components/ActionButtons';
-import Button from '@common/components/Button';
+import Button from '@src/components/Button';
 import SearchInput from '@common/components/SearchInput';
 import TablePagination from '@common/components/TablePagination';
 import SkeletonBar from '@src/components/SkeletonBar';
@@ -59,7 +59,7 @@ const HistoryCard = () => {
     const logContent = fileContentData?.logContent;
 
     return (
-        <PanelCard title={'History'} refetch={query.refetch} isFetching={query.isFetching}>
+        <PanelCard title={'History'} icon={'clock'} refetch={query.refetch} isFetching={query.isFetching}>
             {isSuccess ? (
                 <>
                     <SearchInput
@@ -82,14 +82,16 @@ const HistoryCard = () => {
                                         <td>
                                             <ActionButtons>
                                                 <Button
-                                                    label={'Open'}
-                                                    icon={'folder-open'}
+                                                    icon={'eye'}
+                                                    title={'Open'}
+                                                    size={'sm'}
                                                     onClick={() => handleOpenClick(item)}
                                                 />
                                                 <Button
-                                                    label={'Delete'}
                                                     icon={'trash-2'}
-                                                    variant={'danger'}
+                                                    title={'Delete'}
+                                                    variant={'outline-danger'}
+                                                    size={'sm'}
                                                     loading={deleteHistoryRunning}
                                                     onClick={() => handleDeleteClick(item)}
                                                 />
