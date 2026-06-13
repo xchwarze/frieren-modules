@@ -20,6 +20,9 @@ const useModuleStatus = () => {
             module: 'tcpdump',
             action: 'moduleStatus',
         }),
+        // Re-enter the module -> refetch status (running state, interfaces, variant);
+        // the global 10-min staleTime would otherwise leave it stale on remount.
+        staleTime: 0,
     });
 
     if (query.isSuccess) {

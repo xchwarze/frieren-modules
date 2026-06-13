@@ -20,6 +20,7 @@ const useGetPresets = () => (
             module: 'tcpdump',
             action: 'getPresets',
         }),
+        staleTime: 0,
     })
 );
 

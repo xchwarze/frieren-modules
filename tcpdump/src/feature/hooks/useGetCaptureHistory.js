@@ -15,6 +15,9 @@ const useGetCaptureHistory = () => (
             module: 'tcpdump',
             action: 'getCaptureHistory',
         }),
+        // Always refetch on mount so re-entering the History tab shows new captures
+        // (the global 10-min staleTime would otherwise serve a stale cached list).
+        staleTime: 0,
     })
 );
 
