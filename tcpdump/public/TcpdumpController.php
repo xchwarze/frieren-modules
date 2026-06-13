@@ -156,6 +156,30 @@ class TcpdumpController extends \frieren\core\Controller
         return array_values(array_diff($interfaces, array('.', '..')));
     }
 
+    /**
+     * Detects which tcpdump package is installed. Both packages provide the same
+     * /usr/sbin/tcpdump and the same CLI flags, but `tcpdump-mini` is built with
+     * fewer protocol dissectors (less detailed verbose output). The frontend uses
+     * this only to surface an informational notice — it does not gate any flag.
+     *
+     * @return string|null 'mini', 'full', or null when neither line is found.
+     */
+    private function getToolVariant()
+    {
+        $installed = OpenWrtHelper::exec('/bin/opkg list-installed');
+        if ($installed === false) {
+            return null;
+        }
+        if (strpos($installed, 'tcpdump-mini -') !== false) {
+            return 'mini';
+        }
+        if (strpos($installed, 'tcpdump -') !== false) {
+            return 'full';
+        }
+
+        return null;
+    }
+
     public function moduleStatus()
     {
         // fix default folder
@@ -169,6 +193,8 @@ class TcpdumpController extends \frieren\core\Controller
                 'hasDependencies' => true,
                 'isRunning' => file_exists($this->logPath) && OpenWrtHelper::checkRunning('tcpdump'),
                 'interfaces' => $this->getNetworkInterfaces(),
+                // 'mini' | 'full' | null — informational only (mini has fewer decoders).
+                'toolVariant' => $this->getToolVariant(),
             ]);
         }
 

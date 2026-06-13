@@ -8,6 +8,7 @@ import { useState } from 'react';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
+import Alert from 'react-bootstrap/Alert';
 import Accordion from 'react-bootstrap/Accordion';
 import { useWatch, useFormContext } from 'react-hook-form';
 import { useAtomValue } from 'jotai';
@@ -216,7 +217,7 @@ const SettingsCard = ({ statusQuery }) => {
     const isRunning = useAtomValue(isRunningAtom);
     const { mutate: startCapture } = useStartCapture();
     const { mutate: stopCapture, isPending: stopCaptureRunning } = useStopCapture();
-    const { interfaces } = statusQuery?.data ?? {};
+    const { interfaces, toolVariant } = statusQuery?.data ?? {};
 
     return (
         <PanelCard
@@ -225,6 +226,14 @@ const SettingsCard = ({ statusQuery }) => {
             refetch={statusQuery.refetch}
             isFetching={statusQuery.isFetching}
         >
+            {toolVariant === 'mini' && (
+                <Alert variant={'info'} className={'py-2'}>
+                    <strong>tcpdump-mini</strong> is installed — capture and all builder flags work,
+                    but verbose output has reduced protocol decoding. Install the full
+                    {' '}<code>tcpdump</code> package for complete dissection.
+                </Alert>
+            )}
+
             <FormProvider schema={tcpDumpSettingsSchema} onSubmit={startCapture} defaultValues={DEFAULT_VALUES}>
                 <PresetBar />
 
