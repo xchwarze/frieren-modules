@@ -1,6 +1,6 @@
 {
   "name": "wpaonlinecrack",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Automates wpa hash cracking through online services",
   "license": "LGPL-3.0-only",
   "type": "module",

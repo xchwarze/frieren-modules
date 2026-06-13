@@ -15,11 +15,11 @@ const useSetSettings = () => {
     const queryClient = useQueryClient();
 
     return useAuthenticatedMutation({
-        mutationFn: ({ wpaSecKey, onlinehashcrackEmail, searchPaths }) => fetchPost({
+        mutationFn: ({ wpaSecKey, onlinehashcrackApiKey, searchPaths }) => fetchPost({
             module: 'wpaonlinecrack',
             action: 'setSettings',
             'wpaSecKey': wpaSecKey,
-            'onlinehashcrackEmail': onlinehashcrackEmail,
+            'onlinehashcrackApiKey': onlinehashcrackApiKey,
             'searchPaths': searchPaths,
         }),
         onSuccess: async () => {

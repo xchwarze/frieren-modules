@@ -10,10 +10,12 @@ import DependenciesAlert from '@src/components/DependenciesAlert';
 import PanelTabs from '@src/components/Tabs/PanelTabs';
 import TabTitle from '@src/components/Tabs/TabTitle';
 import ConditionalTabContent from '@src/components/Tabs/ConditionalTabContent';
+import PanelStack from '@common/components/PanelCard/PanelStack';
 import { WPA_ONLINE_CRACK_CHECK_MODULE_DEPENDENCIES } from '@module/feature/helpers/queryKeys.js';
 import useModuleStatus from '@module/feature/hooks/useCheckModuleDependencies.js';
 import CapturesCard from '@module/feature/components/CapturesCard';
 import ResultsCard from '@module/feature/components/ResultsCard';
+import OhcResultsCard from '@module/feature/components/OhcResultsCard';
 import SettingsCard from '@module/feature/components/SettingsCard';
 
 const Screen = () => {
@@ -41,10 +43,13 @@ const Screen = () => {
                 </Tab>
                 <Tab eventKey={'results'} title={<TabTitle title={'Results'} icon={'search'} />}>
                     <ConditionalTabContent id={'wpaonlinecrack'} eventKey={'results'}>
-                        <ResultsCard />
+                        <PanelStack>
+                            <ResultsCard />
+                            <OhcResultsCard />
+                        </PanelStack>
                     </ConditionalTabContent>
                 </Tab>
-                <Tab eventKey={'settings'} title={<TabTitle title={'Settings'} icon={'settings'} />}>
+                <Tab eventKey={'settings'} title={<TabTitle title={'Settings'} icon={'sliders'} />}>
                     <ConditionalTabContent id={'wpaonlinecrack'} eventKey={'settings'}>
                         <SettingsCard />
                     </ConditionalTabContent>

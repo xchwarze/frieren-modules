@@ -19,9 +19,18 @@ class WpaonlinecrackController extends \frieren\core\Controller
         'getCapFiles' => true,
         'sendCap' => true,
         'checkResults' => true,
+        'checkOhcResults' => true,
     ];
 
     const REPORT_PATH = '/tmp/fm-wpaonlinecrack-report.json';
+
+    // OnlineHashCrack v2 API. add_tasks/list_tasks take JSON with an sk_ api key.
+    // It accepts HASHES, not capture files, so caps are converted with
+    // hcxpcapngtool to hashcat mode 22000 (WPA-PBKDF2-PMKID+EAPOL) before upload.
+    const OHC_API_URL = 'https://api.onlinehashcrack.com/v2';
+    const OHC_ALGO_MODE = 22000;
+    const OHC_BATCH_SIZE = 50;
+    const OHC_HASH_TMP = '/tmp/fm-wpaonlinecrack-hash.22000';
 
     // Always scanned for captures. hcxdumptool stores its handshakes under
     // /root/.hcxdumptool, so /root is the sane default; operators add more folders
@@ -34,7 +43,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
 
         return self::setSuccess([
             'wpaSecKey' => $config['wpaSecKey'] ?? '',
-            'onlinehashcrackEmail' => $config['onlinehashcrackEmail'] ?? '',
+            'onlinehashcrackApiKey' => $config['onlinehashcrackApiKey'] ?? '',
             'searchPaths' => self::getConfiguredPaths(),
         ]);
     }
@@ -43,7 +52,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
     {
         self::setConfig([
             'wpaSecKey' => $this->request['wpaSecKey'] ?? '',
-            'onlinehashcrackEmail' => $this->request['onlinehashcrackEmail'] ?? '',
+            'onlinehashcrackApiKey' => $this->request['onlinehashcrackApiKey'] ?? '',
             'searchPaths' => json_encode(self::sanitizePaths($this->request['searchPaths'] ?? [])),
         ]);
 
@@ -162,9 +171,18 @@ class WpaonlinecrackController extends \frieren\core\Controller
 
         $config = self::getConfig();
         $wpaSecKey = $config['wpaSecKey'] ?? false;
-        $onlinehashcrackEmail = $config['onlinehashcrackEmail'] ?? false;
-        if (empty($wpaSecKey) && empty($onlinehashcrackEmail)) {
+        $onlinehashcrackApiKey = $config['onlinehashcrackApiKey'] ?? false;
+        if (empty($wpaSecKey) && empty($onlinehashcrackApiKey)) {
             return self::setError('Configuration incomplete');
+        }
+
+        // OnlineHashCrack v2 needs hashes, so caps are converted with hcxpcapngtool.
+        // It's a soft dependency: WPA-Sec works without it, so only block when OHC is
+        // the only configured service and the tool is missing.
+        $ohcEnabled = !empty($onlinehashcrackApiKey);
+        $ohcReady = $ohcEnabled && self::setupCoreHelper()::commandExists('hcxpcapngtool');
+        if ($ohcEnabled && !$ohcReady && empty($wpaSecKey)) {
+            return self::setError('OnlineHashCrack requires hcxpcapngtool (install the hcxtools package).');
         }
 
         $report = self::getReport();
@@ -204,19 +222,13 @@ class WpaonlinecrackController extends \frieren\core\Controller
                     && stripos($result, 'error') === false;
             }
 
-            if ($onlinehashcrackEmail) {
-                $result = self::setupCoreHelper()::exec(
-                    sprintf('curl -s -f -w "\nHTTP_STATUS:%%{http_code}" -X POST -F %s -F %s "https://api.onlinehashcrack.com"',
-                        escapeshellarg("email={$onlinehashcrackEmail}"),
-                        escapeshellarg("file=@{$capture}")
-                    ),
-                    true,
-                    true
-                );
-
-                $success = $success
-                    && $result !== false
-                    && strpos($result, 'HTTP_STATUS:200') !== false;
+            if ($ohcReady) {
+                // Convert the capture to mode-22000 hashes and submit them. A cap with
+                // no usable handshake yields no hashes — nothing to send, not a failure.
+                $hashes = self::capToHashes($capture);
+                if (!empty($hashes)) {
+                    $success = $success && self::submitHashesToOhc($onlinehashcrackApiKey, $hashes);
+                }
             }
 
             if ($success) {
@@ -233,6 +245,136 @@ class WpaonlinecrackController extends \frieren\core\Controller
             'submitted' => $submitted,
             'skipped' => $skipped,
             'failed' => $failed,
+            // True when an OHC key is set but hcxpcapngtool is missing, so OHC was
+            // skipped while WPA-Sec still ran — the frontend surfaces this as a notice.
+            'ohcSkipped' => ($ohcEnabled && !$ohcReady),
+        ]);
+    }
+
+    /**
+     * Converts a capture file to hashcat mode-22000 hashes via hcxpcapngtool.
+     * Returns the list of hash lines (empty when the cap has no usable handshake).
+     */
+    private function capToHashes($capture)
+    {
+        @unlink(self::OHC_HASH_TMP);
+        self::setupCoreHelper()::exec(
+            sprintf('hcxpcapngtool -o %s %s',
+                escapeshellarg(self::OHC_HASH_TMP),
+                escapeshellarg($capture)
+            ),
+            true,
+            true
+        );
+
+        if (!file_exists(self::OHC_HASH_TMP)) {
+            return [];
+        }
+
+        $content = file_get_contents(self::OHC_HASH_TMP);
+        @unlink(self::OHC_HASH_TMP);
+
+        $lines = array_filter(
+            array_map('trim', explode("\n", (string) $content)),
+            function ($line) {
+                return $line !== '';
+            }
+        );
+
+        return array_values($lines);
+    }
+
+    /**
+     * Submits hashes to OnlineHashCrack v2 (add_tasks), batched to the API limit.
+     * Returns true only when every batch is accepted (curl -f => false on HTTP error).
+     */
+    private function submitHashesToOhc($apiKey, $hashes)
+    {
+        foreach (array_chunk($hashes, self::OHC_BATCH_SIZE) as $batch) {
+            $payload = json_encode([
+                'api_key' => $apiKey,
+                'agree_terms' => 'yes',
+                'action' => 'add_tasks',
+                'algo_mode' => self::OHC_ALGO_MODE,
+                'hashes' => array_values($batch),
+            ]);
+
+            $result = self::setupCoreHelper()::exec(
+                sprintf('curl -s -f -X POST -H %s -d %s %s',
+                    escapeshellarg('Content-Type: application/json'),
+                    escapeshellarg($payload),
+                    escapeshellarg(self::OHC_API_URL)
+                ),
+                true,
+                true
+            );
+
+            if ($result === false) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function checkOhcResults()
+    {
+        $config = self::getConfig();
+        $apiKey = $config['onlinehashcrackApiKey'] ?? false;
+        if (empty($apiKey)) {
+            return self::setError('No OnlineHashCrack API key configured');
+        }
+
+        if (!self::setupCoreHelper()::hasInternetConnection()) {
+            return self::setError('No internet connection');
+        }
+
+        $payload = json_encode([
+            'api_key' => $apiKey,
+            'agree_terms' => 'yes',
+            'action' => 'list_tasks',
+        ]);
+
+        $output = self::setupCoreHelper()::exec(
+            sprintf('curl -s -f -X POST -H %s -d %s %s',
+                escapeshellarg('Content-Type: application/json'),
+                escapeshellarg($payload),
+                escapeshellarg(self::OHC_API_URL)
+            ),
+            true,
+            true
+        );
+
+        if ($output === false) {
+            return self::setError('Failed to retrieve results from OnlineHashCrack');
+        }
+
+        $decoded = json_decode($output, true);
+        if (!is_array($decoded)) {
+            return self::setError('Unexpected response from OnlineHashCrack');
+        }
+
+        // The task array wrapper key isn't fixed across versions — accept the common
+        // ones, or a bare list. OHC's API returns task STATUS, not the plaintext;
+        // the recovered password stays on their site.
+        $tasks = $decoded['tasks'] ?? $decoded['data'] ?? $decoded['results'] ?? (isset($decoded[0]) ? $decoded : []);
+
+        $results = [];
+        foreach ($tasks as $task) {
+            if (!is_array($task)) {
+                continue;
+            }
+            $results[] = [
+                'hash' => $task['hash'] ?? '',
+                'status' => $task['status'] ?? '',
+                'algorithm' => $task['algorithm'] ?? ($task['algomode'] ?? ''),
+                'lastAttack' => $task['lastAttack'] ?? '',
+                'createdAt' => $task['created_at'] ?? '',
+            ];
+        }
+
+        return self::setSuccess([
+            'tasks' => $results,
         ]);
     }
 

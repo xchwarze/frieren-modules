@@ -20,7 +20,10 @@ import useSetSettings from '@module/feature/hooks/useSetSettings.js';
 
 const wpaOnlineCrackSettingsSchema = yup.object({
     wpaSecKey: yup.string(),
-    onlinehashcrackEmail: yup.string().email('Must be a valid email'),
+    onlinehashcrackApiKey: yup.string().matches(/^sk_[A-Za-z0-9]{32,64}$/, {
+        message: 'Must be a valid OnlineHashCrack key (sk_...)',
+        excludeEmptyString: true,
+    }),
     searchPaths: yup.array().of(yup.object({
         path: yup.string().trim().matches(/^\//, {
             message: 'Path must be absolute (start with /)',
@@ -79,7 +82,7 @@ const SettingsCard = () => {
 
     const defaultValues = {
         wpaSecKey: settingsQuery?.data?.wpaSecKey ?? '',
-        onlinehashcrackEmail: settingsQuery?.data?.onlinehashcrackEmail ?? '',
+        onlinehashcrackApiKey: settingsQuery?.data?.onlinehashcrackApiKey ?? '',
         searchPaths: (settingsQuery?.data?.searchPaths ?? []).map((path) => ({ path })),
     };
 
@@ -92,7 +95,7 @@ const SettingsCard = () => {
         <PanelCard
             title={'Settings'}
             icon={'sliders'}
-            subtitle={<>To use these third party services you must be registered on their respective sites. <a href="https://wpa-sec.stanev.org/?get_key" target="_blank" rel="noopener noreferrer">Get your WPA-Sec API key here</a>.</>}
+            subtitle={<>To use these third party services you must be registered on their respective sites. <a href="https://wpa-sec.stanev.org/?get_key" target="_blank" rel="noopener noreferrer">Get your WPA-Sec API key</a> · <a href="https://www.onlinehashcrack.com/apimgt" target="_blank" rel="noopener noreferrer">Get your OnlineHashCrack API key</a>.</>}
             refetch={settingsQuery.refetch}
             isFetching={settingsQuery.isFetching}
         >
@@ -103,9 +106,9 @@ const SettingsCard = () => {
                     placeholder={'Enter your WPA-Sec service key'}
                 />
                 <InputField
-                    name={'onlinehashcrackEmail'}
-                    label={'OnlineHashCrack Email'}
-                    placeholder={'Enter your email for OnlineHashCrack'}
+                    name={'onlinehashcrackApiKey'}
+                    label={'OnlineHashCrack API Key'}
+                    placeholder={'sk_...'}
                 />
                 <SearchPathsField />
                 <FormActions>

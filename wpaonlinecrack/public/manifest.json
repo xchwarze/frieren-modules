@@ -18,9 +18,10 @@
     "OpenWrt"
   ],
   "dependencies": [
-    "curl"
+    "curl",
+    "hcxtools"
   ],
   "system": false,
   "forceSidebar": false,
-  "version": "1.1.2"
+  "version": "1.1.3"
 }

@@ -9,3 +9,4 @@ export const WPA_ONLINE_CRACK_GET_SETTINGS = 'wpa-online-crack-get-settings';
 export const WPA_ONLINE_CRACK_GET_CAP_FILES = 'wpa-online-crack-get-cap-files';
 export const WPA_ONLINE_CRACK_CHECK_MODULE_DEPENDENCIES = 'wpa-online-crack-check-module-dependencies';
 export const WPA_ONLINE_CRACK_CHECK_RESULTS = 'wpa-online-crack-check-results';
+export const WPA_ONLINE_CRACK_CHECK_OHC_RESULTS = 'wpa-online-crack-check-ohc-results';
