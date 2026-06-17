@@ -1,6 +1,6 @@
 # hcxdumptool Module
 
-A web UI for capturing WiFi handshakes and PMKIDs passively using [hcxdumptool](https://github.com/ZerBea/hcxdumptool). The hcxdumptool module supports both the 6.2.x and 6.3.x CLI branches, provides capture presets for common scenarios, exposes diagnostic commands for hardware validation, and produces `.pcapng` capture files compatible with hashcat and wpaonlinecrack.
+A web UI for capturing WiFi handshakes and PMKIDs passively using [hcxdumptool](https://github.com/ZerBea/hcxdumptool). The hcxdumptool module supports both the 6.2.x and 6.3.x CLI branches, provides capture presets for common scenarios, exposes diagnostic commands for hardware validation, and produces `.pcapng` capture files compatible with hashcat and wpaonlinecrack. WPA/WPA2/WPA3 handshakes and PMKIDs are supported.
 
 ## Features
 
@@ -13,7 +13,7 @@ A web UI for capturing WiFi handshakes and PMKIDs passively using [hcxdumptool](
 - **Stop capture** — terminate a running capture at any time with SIGKILL
 - **Timestamped capture history** — all captures are saved as `.pcapng` files under `/root/.hcxdumptool/`; browse and download from the History tab
 - **Delete captures** — remove individual captures or clear the entire history
-- **Diagnostic commands** — run `-L` (channel list), `-C` (channel details), `-I` (interface info), and `--check_driver` as background tasks with progress polling; useful for confirming hardware compatibility before capturing
+- **Diagnostic commands** — run hardware probe commands as background tasks with progress polling; available commands are version-specific: 6.3.x exposes `-L` (list interfaces) and `-I <iface>` (per-interface detail); 6.2.x exposes `-I` (list interfaces), `-C` (show channels), and `--check_driver`; a Stop button cancels a hung probe
 - **Dependency management** — detects hcxdumptool binary presence and provides opkg install with destination selection (internal/SD)
 
 ## Use Cases
@@ -21,7 +21,7 @@ A web UI for capturing WiFi handshakes and PMKIDs passively using [hcxdumptool](
 - **WPA/WPA2 handshake capture** — passively capture WPA handshakes from clients connecting to nearby access points for offline cracking with hashcat or via the WPA Online Crack module
 - **PMKID capture** — capture PMKID frames without requiring a client to be present, enabling faster passive WiFi auditing
 - **Wireless reconnaissance** — scan the RF environment to enumerate nearby access points, clients, and their associations without injecting traffic
-- **Hardware validation** — use the diagnostic commands (`-L`, `-I`, `--check_driver`) to confirm the wireless adapter supports monitor mode and injection before starting a capture session
+- **Hardware validation** — use the version-appropriate diagnostic commands (6.3.x: `-L`, `-I <iface>`; 6.2.x: `-I`, `-C`, `--check_driver`) to confirm the wireless adapter is recognized and supported before starting a capture session
 - **Targeted capture** — use ESSID filter lists or BPF expressions to restrict captures to specific networks and reduce noise in high-density environments
 - **Capture file generation for downstream tools** — produce `.pcapng` files for submission to wpa-sec.stanev.org (via WPA Online Crack) or direct conversion with hcxtools for hashcat input
 
