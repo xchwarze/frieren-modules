@@ -3,23 +3,26 @@
   "name": "nmap",
   "description": "Web GUI for Nmap, the most popular network mapping tool.",
   "icon": "icon.png",
-  "author": {
-    "name": "m5kro",
-    "email": "m5kro@proton.me"
-  },
+  "authors": [
+    {
+      "name": "m5kro",
+      "email": "m5kro@proton.me"
+    }
+  ],
   "keywords": [
     "nmap"
   ],
   "repository": "https://github.com/xchwarze/frieren-modules/tree/master/nmap",
-  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
-  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "documentation": "https://github.com/xchwarze/frieren-modules/tree/master/nmap#readme",
+  "license": "LGPL-3.0-or-later",
   "guestType": [
     "OpenWrt"
   ],
   "dependencies": [
     "nmap"
   ],
+  "minPanelVersion": "1.0.0",
   "system": false,
   "forceSidebar": false,
-  "version": "1.1.1"
+  "version": "1.1.2"
 }

@@ -3,24 +3,27 @@
   "name": "hcxdumptool",
   "description": "WiFi handshake/PMKID capture and recon via hcxdumptool",
   "icon": "icon.png",
-  "author": {
-    "name": "DSR!",
-    "email": "xchwarze@gmail.com"
-  },
+  "authors": [
+    {
+      "name": "DSR!",
+      "email": "xchwarze@gmail.com"
+    }
+  ],
   "keywords": [
     "wifi",
     "handshake"
   ],
   "repository": "https://github.com/xchwarze/frieren-modules/tree/master/hcxdumptool",
-  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
-  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "documentation": "https://github.com/xchwarze/frieren-modules/tree/master/hcxdumptool#readme",
+  "license": "LGPL-3.0-or-later",
   "guestType": [
     "OpenWrt"
   ],
   "dependencies": [
     "hcxdumptool"
   ],
+  "minPanelVersion": "1.0.0",
   "system": false,
   "forceSidebar": false,
-  "version": "1.0.2"
+  "version": "1.0.3"
 }

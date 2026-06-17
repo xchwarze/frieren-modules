@@ -3,17 +3,19 @@
   "name": "wpaonlinecrack",
   "description": "Automates wpa hash cracking through online services",
   "icon": "icon.png",
-  "author": {
-    "name": "DSR!",
-    "email": "xchwarze@gmail.com"
-  },
+  "authors": [
+    {
+      "name": "DSR!",
+      "email": "xchwarze@gmail.com"
+    }
+  ],
   "keywords": [
     "hash",
     "wpa"
   ],
   "repository": "https://github.com/xchwarze/frieren-modules/tree/master/wpaonlinecrack",
-  "bugs": "https://github.com/xchwarze/frieren-modules/issues",
-  "homepage": "https://github.com/xchwarze/frieren-modules",
+  "documentation": "https://github.com/xchwarze/frieren-modules/tree/master/wpaonlinecrack#readme",
+  "license": "LGPL-3.0-or-later",
   "guestType": [
     "OpenWrt"
   ],
@@ -21,6 +23,7 @@
     "curl",
     "hcxtools"
   ],
+  "minPanelVersion": "1.0.0",
   "system": false,
   "forceSidebar": false,
   "version": "1.1.3"
