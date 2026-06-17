@@ -1,76 +1,49 @@
-# Frieren Module Template
+# Demo Module
 
-![Mascot](../assets/blueprint.png)
+A smoke-test and reference implementation for the Frieren module ecosystem. The Demo module exercises every UMD window dependency exposed by the Frieren frontend framework — React Query, react-hook-form, yup, Jotai, and Wouter — within a single, production-style module. Its backend exposes a real API endpoint that reads live system statistics from the OpenWrt device via `ubus`.
 
-## Description
+## Features
 
-The `frieren-module-template` is designed as a scaffolding tool to facilitate the development of new modules extending the Frieren project. Utilizing the generation of UMD libraries, it aims to simplify the creation and integration of modular features, enhancing the Frieren ecosystem with reusable and distributable components.
+- **System statistics card** — fetches and displays CPU usage, memory consumption, swap usage, and uptime via `ubus call system info`; renders skeleton placeholders while the query is loading
+- **Form validation demo** — a react-hook-form form with yup schema validation and toast feedback on submission
+- **State management demo** — two Jotai atoms: an ephemeral in-memory counter and a `localStorage`-persisted value that survives page reload
+- **Routing demo** — displays the current Wouter location to confirm router integration inside the UMD bundle
+- **UMD bundle validation** — loads as a standard Frieren module, confirming the full build pipeline works end-to-end
 
-## Getting Started
+## Use Cases
 
-To begin developing your own module for the Frieren project, follow these steps:
+- **Verify framework integration** after upgrading the Frieren core or panel; a working Demo module confirms all shared dependencies resolve correctly at runtime
+- **Smoke-test new device deployments** to validate that `ubus`, PHP, and the module API gateway are responding before deploying operational modules
+- **Reference implementation for module authors** — the Demo module illustrates the canonical patterns for queries, mutations, atoms, form validation, and skeleton loading states; copy any component as a starting point
+- **Build-pipeline validation** — confirms that the Vite UMD build, the module manifest, and the panel loader all work together correctly
 
-1. **Setup**: Clone the repository and install both `frieren-front` and `frieren-module-template` dependencies with `yarn install`.
-2. **Feature Creation**: In the `frieren-front` project, create a new feature. Utilize the `@module` alias to ensure this new feature is completely isolated.
-3. **Module Wizard**: Navigate to the `frieren-module-template` directory in your console and execute `yarn wizard`. Follow the wizard's guidance through the setup process. This command will also use as .env the .env.prod file.
-4. **Feature Integration**: Transfer the isolated feature from `frieren-front` to `frieren-module-template`, connecting it to `entry.jsx`. Remember to correct the paths by doing a mass replace similar to this: `features/tcpdump` -> `feature`.
-5. **Build Module**: In the `frieren-module-template` project, run `yarn build` to compile your module.
-6. **Finalize and Publish**: Rename the module folder to match your module's name and upload it to GitHub.
-7. **Explore Existing Modules**: For inspiration or guidance, you can view a variety of already developed modules in the official [module repository](https://github.com/xchwarze/frieren-modules). These modules demonstrate practical solutions to common challenges such as dependency management and data handling via polling, serving as valuable templates for similar functionalities in new modules.
+## Requirements
 
-## Module Development
+| Requirement | Notes |
+|-------------|-------|
+| OpenWrt with `ubus` | System info endpoint |
+| `/proc/stat` | CPU core count |
+| No opkg packages | No additional packages required |
 
-This template comes equipped with various scripts to aid in your module development:
+## Architecture
 
-- `build`: Compiles your module into a distributable format.
-- `wizard`: A guided setup to scaffold your module.
-- `validate`: Ensures your module meets the required specifications.
-- `update-module`: Syncs a module's dependencies and config files with this template. Supports `--force`, `--no-files`, `--no-install`, and `--build` flags.
-- `version-bump`: Bumps the module version in package.json and manifest.json.
+```
+Frontend (UMD bundle)          Backend (PHP)
+─────────────────────          ─────────────────
+SystemStatsCard                DemoController
+  └─ useSystemStats ──────────▶ getSystemStats
+       (React Query, 0s)          └─ ubus call system info
+                                  └─ /proc/stat (core count)
+FormDemoCard
+  └─ react-hook-form + yup
 
-## Advanced Examples for Reference
-
-This section provides insights into more complex scenarios that you might encounter while developing modules for the Frieren project. These examples highlight advanced usage of the framework's capabilities and can serve as a reference for implementing sophisticated features in your modules.
-
-- **[WPA Online Crack](https://github.com/xchwarze/frieren-modules/tree/master/wpaonlinecrack)**: This example demonstrates the automatic dependency installation system. It illustrates how the module seamlessly integrates required libraries without manual interventions, ensuring that all dependencies are correctly managed and installed.
-- **[TCP Dump](https://github.com/xchwarze/frieren-modules/tree/master/tcpdump)**: Here, you can see a variation of the dependency installation system, which includes additional checks performed by a third-party module. This ensures that all dependencies not only get installed but are also verified and validated against specific criteria before being utilized.
-- **[WPA Online Crack](https://github.com/xchwarze/frieren-modules/tree/master/wpaonlinecrack)**: This example provides insights into using the system to persist configurations. It shows how to effectively save and retrieve configuration settings to ensure that data persistence is maintained across sessions, which is crucial for modules that require state management.
-
-These examples are designed to provide a deeper understanding of how you can leverage the Frieren project's infrastructure to develop robust and efficient modules.
-
-## Common Configuration
-
-In the root of this project, the `config` folder contains common configurations essential for compiling modules. Here is an example of the configurations available:
-
-```env
-# API gateway
-VITE_RELATIVE_API_PATH=api/index.php
-
-# for build
-VITE_COMPRESSION_ENABLE=true
-VITE_ANALYZER_ENABLE=false
-VITE_SOURCEMAP=false
-VITE_MANUAL_CHUNKS_ENABLE=false
+StateDemoCard
+  └─ Jotai atoms (counter + persisted)
+  └─ Wouter (location display)
 ```
 
-### Configuration Flags
-
-- `VITE_RELATIVE_API_PATH`: Defines the relative path to the API entry point. This is used to configure the API gateway path.
-- `VITE_COMPRESSION_ENABLE`: When set to true, it enables compression of the build files, reducing their size and improving load times. This option is primarily used for creating distributable releases and for testing with real hardware in actual environments.
-- `VITE_ANALYZER_ENABLE`: Enables the bundle analyzer plugin when set to `true`. This is useful for analyzing and visualizing the size of the output files.
-- `VITE_SOURCEMAP`: Controls the generation of sourcemaps. Setting this to `true` helps in debugging by mapping the compiled code back to the original source code.
-- `VITE_MANUAL_CHUNKS_ENABLE`: When enabled, this allows for manual chunking of the build output, which can be particularly useful during development and testing with real hardware. This option helps to optimize the loading strategy by separating vendor code from the core code.
-
-## Dependencies
-
-Your module will have access to a range of peer dependencies for development, including React, React-DOM, jotai, and more, to ensure compatibility and seamless integration with the Frieren ecosystem.
+The single backend endpoint calculates CPU load from the 1-minute load average (`load[0] / 65536 / cores`), memory used excluding buffers and cache, and formats uptime from raw seconds.
 
 ## License
 
-This template and your modules are intended to be shared under the LGPL-3.0-only License, promoting open-source collaboration and distribution.
-
-## Notes
-
-Developing a module for the Frieren project is an opportunity to contribute to a growing ecosystem. Your modules can add significant value, from system configuration to the management of third-party modules. Following the steps above will guide you through the process of creating, building, and sharing your module.
-
-Happy coding!
+LGPL-3.0-or-later
