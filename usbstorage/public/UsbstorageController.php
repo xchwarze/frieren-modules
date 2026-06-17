@@ -8,10 +8,13 @@
 
 namespace frieren\modules\usbstorage;
 
+use frieren\helper\BackgroundTaskHelper;
+
 class UsbstorageController extends \frieren\core\Controller
 {
-    private $autoSetupFlag = '/tmp/auto_setup.flag';
-    private $autoSetupLog = '/tmp/auto_setup.log';
+    // Background task slot for the auto-setup script. BackgroundTaskHelper owns the
+    // completion flag + combined log; the script no longer manages its own flag.
+    const TASK_AUTOSETUP = 'usbstorage-autosetup';
 
     protected $endpointRoutes = [
         // dependency control apis
@@ -28,24 +31,36 @@ class UsbstorageController extends \frieren\core\Controller
 
     public function startAutoSetup()
     {
+        if (BackgroundTaskHelper::isRunning(self::TASK_AUTOSETUP)) {
+            return self::setError('Auto-setup is already running.');
+        }
+
         $scriptPath = self::getModulePath() . '/bin/auto-setup.sh';
-        self::setupCoreHelper()::execBackground("{$scriptPath}", "{$this->autoSetupLog} 2>&1");
+        if (!file_exists($scriptPath)) {
+            return self::setError('Auto-setup script not found.');
+        }
+
+        // Run via `sh <script>` (not the bare path) so the launch does not depend on
+        // the script's +x bit, which a module install/extraction can strip.
+        BackgroundTaskHelper::start(self::TASK_AUTOSETUP, 'sh ' . escapeshellarg($scriptPath));
 
         return self::setSuccess();
     }
 
     public function getAutoSetupStatus()
     {
+        $status = BackgroundTaskHelper::getStatus(self::TASK_AUTOSETUP);
+
         return self::setSuccess([
-            'logContent' => @file_get_contents($this->autoSetupLog),
-            'isRunning' => file_exists($this->autoSetupFlag),
+            'logContent' => $status['output'],
+            'isRunning' => BackgroundTaskHelper::isRunning(self::TASK_AUTOSETUP),
         ]);
     }
 
     public function getFstabConfig()
     {
         return self::setSuccess([
-            'config' => @file_get_contents('/etc/config/fstab'),
+            'config' => self::setupModuleHelper()::getFstabConfig(),
         ]);
     }
 
@@ -55,12 +70,10 @@ class UsbstorageController extends \frieren\core\Controller
             return self::setError('config param value is not valid!');
         }
 
-        $status = file_put_contents('/etc/config/fstab', $this->request['config']);
-        if ($status !== false) {
-            exec('/etc/init.d/fstab restart');
-            return self::setSuccess();
+        if (!self::setupModuleHelper()::saveFstabConfig($this->request['config'])) {
+            return self::setError('Error saving fstab config.');
         }
 
-        return self::setError('Error saving fstab config.');
+        return self::setSuccess();
     }
 }

@@ -5,8 +5,8 @@
 # More info at: https://github.com/xchwarze/frieren
 
 # Script to auto-detect storage device and execute formatting and setup scripts
-
-PROGRESS_FLAG="/tmp/auto_setup.flag"
+# Liveness/completion is tracked by the backend BackgroundTaskHelper (task
+# "usbstorage-autosetup"); this script no longer manages its own progress flag.
 
 # Possible device paths
 DEVICES="/dev/sdcard/sd /dev/mmcblk0 /dev/sda"
@@ -22,7 +22,7 @@ run_scripts() {
         if [ -b "$device" ]; then
             echo "[+] Device found: $device"
             echo "    Attempting to format the device using format-device.sh..."
-            $SCRIPT_DIR/format-device.sh "$device"
+            sh "$SCRIPT_DIR/format-device.sh" "$device"
             FORMAT_EXIT_CODE=$?
 
             if [ $FORMAT_EXIT_CODE -eq 0 ]; then
@@ -30,7 +30,7 @@ run_scripts() {
                 sleep 5
 
                 echo "[*] Formatting successful. Proceeding setup with post-format.sh..."
-                $SCRIPT_DIR/post-format.sh
+                sh "$SCRIPT_DIR/post-format.sh"
                 SETUP_EXIT_CODE=$?
 
                 if [ $SETUP_EXIT_CODE -eq 0 ]; then
@@ -55,8 +55,6 @@ run_scripts() {
 }
 
 # Main execution
-touch "$PROGRESS_FLAG"
 run_scripts
-rm "$PROGRESS_FLAG"
 
 exit 0
