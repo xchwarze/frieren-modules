@@ -7,62 +7,96 @@
 # Path for the formatting progress flag
 PROGRESS_FLAG="/tmp/format_device.flag"
 
-# Function to unmount and format the SD card partitions
+# Wait until a block device node appears. After fdisk rewrites the table the
+# kernel/hotplug re-creates the partition nodes asynchronously; this bounds the
+# wait so a node that never shows up can't hang the script.
+wait_for_block() {
+    _dev=$1
+    _tries=0
+    while [ ! -b "$_dev" ] && [ "$_tries" -lt 10 ]; do
+        sleep 1
+        _tries=$((_tries + 1))
+    done
+
+    [ -b "$_dev" ]
+}
+
+# Unmount and format the device into a 1G swap partition + an ext4 data
+# partition. Returns non-zero on the first failed step so the caller can react.
 steps() {
     DEVICE_PATH=$1
     MOUNT_POINT=$2
 
-    # Ensure the SD card is not in use
-    # maybe I need to add a "reset"script here like:
-    # echo '$DEVICE' > /sys/bus/usb/drivers/usb/unbind > /dev/null 2>&1
-    # echo '$DEVICE' > /sys/bus/usb/drivers/usb/bind > /dev/null 2>&1
+    # Free the device: unmount the target mount and every partition of the
+    # device, and disable any swap living on it, so fdisk is not writing to a
+    # busy disk (the old version only unmounted MOUNT_POINT).
+    echo "[+] Releasing device ${DEVICE_PATH} ..."
     if mount | grep -q " ${MOUNT_POINT} "; then
-        echo "[+] Unmount the SD card..."
-        
-        umount -f ${MOUNT_POINT}
-        if swapon -s | grep -q "^${DEVICE_PATH}"; then
-            echo "[+] Turning off swap asociated to device"
-            swapoff ${DEVICE_PATH}*
-        fi
-        
-        sleep 5
+        umount -f "${MOUNT_POINT}" 2>/dev/null
     fi
+    for part in ${DEVICE_PATH}*; do
+        [ -b "$part" ] || continue
+        umount -f "$part" 2>/dev/null
+        swapoff "$part" 2>/dev/null
+    done
+    sync
+    sleep 2
 
-    echo "[+] Apply fdisk options"
-    # fdisk params explanation:
-    # o   -> Create a new empty DOS partition table
-    # n   -> New partition
-    # p   -> Primary partition
-    # 1   -> Partition number 1
-    #     -> First sector (Accept default: 1)
-    # +1G -> Last sector (1GB for the swap partition)
-    # t   -> Change partition type
-    # 82  -> Set type to Linux swap / Solaris
-    # n   -> New partition
-    # p   -> Primary partition
-    # 2   -> Partition number 2
-    #     -> First sector (Accept default: next available)
-    #     -> Last sector (Accept default: remainder of the disk)
-    # w   -> Write changes
-    echo -e "o\nn\np\n1\n\n+1G\nt\n82\nn\np\n2\n\n\nw\n" | fdisk ${DEVICE_PATH}
-    sleep 4
+    echo "[+] Writing partition table (1G swap + ext4)..."
+    # printf (not "echo -e") feeds the interactive fdisk prompts: it expands \n
+    # reliably under busybox ash, where echo's -e handling is not guaranteed.
+    # fdisk steps: o(new table) n p 1 <def> +1G  t 82(swap)  n p 2 <def> <def>  w
+    printf 'o\nn\np\n1\n\n+1G\nt\n82\nn\np\n2\n\n\nw\n' | fdisk "${DEVICE_PATH}"
+    if [ $? -ne 0 ]; then
+        echo "[!] fdisk failed."
+        return 1
+    fi
+    sync
+    # best-effort kernel re-read; the wait_for_block loop below is the real guard
+    partprobe "${DEVICE_PATH}" 2>/dev/null
+    sleep 2
 
-    # Determine new partition names
-    PARTITIONS=$(fdisk -l ${DEVICE_PATH} | awk '/^\/dev/ {print $1}')
+    # Detect the partition node names from the freshly written table. Reading
+    # them back (vs computing a 'p' suffix) stays correct for aliased device
+    # paths such as /dev/sdcard/sd.
+    PARTITIONS=$(fdisk -l "${DEVICE_PATH}" | awk '/^\/dev/ {print $1}')
     SWAP_PART=$(echo "$PARTITIONS" | head -n 1)
     FS_PART=$(echo "$PARTITIONS" | tail -n 1)
+    if [ -z "$SWAP_PART" ] || [ -z "$FS_PART" ] || [ "$SWAP_PART" = "$FS_PART" ]; then
+        echo "[!] Could not detect the two partitions."
+        return 1
+    fi
 
-    echo "[+] Formatting and setting up partitions..."
-    mkswap $SWAP_PART
-    mkfs.ext4 -F $FS_PART
-    sleep 3
+    echo "[+] Waiting for partition nodes (${SWAP_PART}, ${FS_PART})..."
+    if ! wait_for_block "$SWAP_PART" || ! wait_for_block "$FS_PART"; then
+        echo "[!] Partition device nodes did not appear."
+        return 1
+    fi
+
+    echo "[+] Formatting partitions..."
+    if ! mkswap "$SWAP_PART"; then
+        echo "[!] mkswap failed."
+        return 1
+    fi
+    if ! mkfs.ext4 -F "$FS_PART"; then
+        echo "[!] mkfs.ext4 failed."
+        return 1
+    fi
+    sync
 
     echo "[+] Mounting and activating swap..."
-    mount $FS_PART ${MOUNT_POINT}
-    swapon $SWAP_PART
+    mkdir -p "${MOUNT_POINT}"
+    if ! mount "$FS_PART" "${MOUNT_POINT}"; then
+        echo "[!] mount failed."
+        return 1
+    fi
+    # swap is non-fatal: the data mount is what matters
+    swapon "$SWAP_PART" 2>/dev/null || echo "[!] swapon failed (continuing)."
 
     echo "[*] Device and partition information:"
-    fdisk -l ${DEVICE_PATH}
+    fdisk -l "${DEVICE_PATH}"
+
+    return 0
 }
 
 
@@ -89,7 +123,10 @@ DEVICE_PATH=$1
 MOUNT_POINT="/sd"
 
 touch "$PROGRESS_FLAG"
-steps $DEVICE_PATH $MOUNT_POINT
-rm "$PROGRESS_FLAG"
+steps "$DEVICE_PATH" "$MOUNT_POINT"
+RESULT=$?
+rm -f "$PROGRESS_FLAG"
 
-exit 0
+# Propagate the real result so the caller knows if formatting actually worked
+# (the old version hardcoded "exit 0", masking every failure).
+exit $RESULT
