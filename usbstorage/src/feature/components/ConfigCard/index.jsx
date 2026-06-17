@@ -41,7 +41,7 @@ const ConfigCard = () => {
         <PanelCard
             title={'FSTAB Configuration'}
             icon={'hard-drive'}
-            subtitle={'Manage and configure system mount points through FSTAB settings.' +
+            subtitle={'Manage and configure system mount points through FSTAB settings. ' +
                 'This interface allows you to view and update the filesystem table configuration, ensuring proper device and partition mounting on system startup.'}
             refetch={query.refetch}
             isFetching={query.isFetching}

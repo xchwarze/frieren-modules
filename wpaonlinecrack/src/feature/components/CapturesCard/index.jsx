@@ -6,11 +6,11 @@
  */
 import { useState, useMemo } from 'react';
 import Form from 'react-bootstrap/Form';
-import Badge from 'react-bootstrap/Badge';
 
 import PanelCard from '@common/components/PanelCard';
 import PanelTable from '@common/components/PanelTable';
 import Button from '@common/components/Button';
+import StatusBadge from '@common/components/StatusBadge';
 import FormActions from '@common/components/FormActions';
 import SearchInput from '@common/components/SearchInput';
 import TablePagination from '@common/components/TablePagination';
@@ -108,11 +108,9 @@ const CapturesCard = () => {
                                     </td>
                                     <td>{item.path}</td>
                                     <td>
-                                        {item.submitted ? (
-                                            <Badge bg={'success'}>Submitted</Badge>
-                                        ) : (
-                                            <Badge bg={'secondary'}>Pending</Badge>
-                                        )}
+                                        <StatusBadge status={item.submitted ? 'active' : 'pending'}>
+                                            {item.submitted ? 'Submitted' : 'Pending'}
+                                        </StatusBadge>
                                     </td>
                                 </tr>
                             ))

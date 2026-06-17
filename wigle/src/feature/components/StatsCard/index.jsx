@@ -22,15 +22,20 @@ const StatsCard = () => {
             refetch={query.refetch}
             isFetching={query.isFetching}
         >
-            {isSuccess && stats ? (
+            {isSuccess ? (
                 <PanelTable>
                     <tbody>
-                        {Object.entries(stats).map(([key, value]) => (
+                        {Object.entries(stats ?? {}).map(([key, value]) => (
                             <tr key={key}>
                                 <td className={'fw-bold'}>{key}</td>
                                 <td>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</td>
                             </tr>
                         ))}
+                        {(!stats || Object.keys(stats).length === 0) && (
+                            <tr>
+                                <td colSpan={2}>No statistics found</td>
+                            </tr>
+                        )}
                     </tbody>
                 </PanelTable>
             ) : (

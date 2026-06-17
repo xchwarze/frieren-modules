@@ -133,7 +133,7 @@ const Screen = () => {
                     />
                 )}
 
-                <div className={'d-flex flex-wrap gap-2 mt-3'}>
+                <div className={'d-flex flex-wrap justify-content-end gap-2 mt-3'}>
                     <Button
                         label={'Restart Service'}
                         icon={'rotate-cw'}

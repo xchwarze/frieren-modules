@@ -17,7 +17,7 @@ import StateDemoCard from '@module/feature/components/StateDemoCard';
  * @return {ReactElement} The rendered Dashboard component
  */
 const Dashboard = () => (
-    <div className="text-center my-5">
+    <div className="text-center">
         <h1 className="mb-3">Demo Module</h1>
         <p className="mb-4">
             UMD module smoke test. Exercises all window dependencies provided by the main application.
