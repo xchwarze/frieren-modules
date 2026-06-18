@@ -12,6 +12,10 @@ class ProxyhelperController extends \frieren\core\Controller
 {
     private $backupDirectory = '/root/.proxyhelper';
 
+    // Dedicated nat chain holding our scoped MASQUERADE rules, so disable can flush them
+    // all at once (orphan-proof) regardless of the host/port used at enable time.
+    const MASQ_CHAIN = 'FRIEREN_PROXY';
+
     protected $endpointRoutes = [
         'getSettings' => true,
         'setSettings' => true,
@@ -73,9 +77,9 @@ class ProxyhelperController extends \frieren\core\Controller
     }
 
     /**
-     * POSTROUTING match scoped to the proxy destination/port, so we MASQUERADE only the
-     * proxied flow instead of every outbound packet. Add/delete/check use this same string
-     * to stay idempotent. All values escaped.
+     * Match scoped to the proxy destination/port, so we MASQUERADE only the proxied flow
+     * instead of every outbound packet. Add/check use this same string to stay idempotent.
+     * All values escaped.
      */
     private function masqueradeMatch($proxyHost, $proxyPort)
     {
@@ -84,9 +88,41 @@ class ProxyhelperController extends \frieren\core\Controller
             . ' -j MASQUERADE';
     }
 
+    /**
+     * Ensure our dedicated MASQUERADE chain exists and is jumped to from POSTROUTING.
+     * Isolating our rules in their own chain (like evilportal's nft table) means teardown
+     * can flush them all regardless of host/port — no orphans when settings change between
+     * enable and disable.
+     */
+    private function ensureMasqueradeChain()
+    {
+        exec('iptables -t nat -N ' . self::MASQ_CHAIN . ' 2>/dev/null');
+        exec('iptables -t nat -C POSTROUTING -j ' . self::MASQ_CHAIN . ' 2>/dev/null', $output, $code);
+        if ($code !== 0) {
+            exec('iptables -t nat -A POSTROUTING -j ' . self::MASQ_CHAIN);
+        }
+    }
+
+    /**
+     * Remove every MASQUERADE rule we created plus the chain itself: flush the chain,
+     * drop the POSTROUTING jump (draining duplicates), then delete the empty chain.
+     */
+    private function teardownMasqueradeChain()
+    {
+        exec('iptables -t nat -F ' . self::MASQ_CHAIN . ' 2>/dev/null');
+        while (true) {
+            exec('iptables -t nat -C POSTROUTING -j ' . self::MASQ_CHAIN . ' 2>/dev/null', $output, $code);
+            if ($code !== 0) {
+                break;
+            }
+            exec('iptables -t nat -D POSTROUTING -j ' . self::MASQ_CHAIN . ' 2>/dev/null');
+        }
+        exec('iptables -t nat -X ' . self::MASQ_CHAIN . ' 2>/dev/null');
+    }
+
     private function masqueradeRuleExists($proxyHost, $proxyPort)
     {
-        exec('iptables -t nat -C POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort) . ' 2>/dev/null', $output, $code);
+        exec('iptables -t nat -C ' . self::MASQ_CHAIN . ' ' . $this->masqueradeMatch($proxyHost, $proxyPort) . ' 2>/dev/null', $output, $code);
 
         return $code === 0;
     }
@@ -153,8 +189,9 @@ class ProxyhelperController extends \frieren\core\Controller
                 }
             }
 
+            $this->ensureMasqueradeChain();
             if (!$this->masqueradeRuleExists($proxyHost, $proxyPort)) {
-                exec('iptables -t nat -A POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort));
+                exec('iptables -t nat -A ' . self::MASQ_CHAIN . ' ' . $this->masqueradeMatch($proxyHost, $proxyPort));
             }
 
             return self::setSuccess(['message' => 'Routing enabled']);
@@ -168,9 +205,9 @@ class ProxyhelperController extends \frieren\core\Controller
                 }
             }
 
-            while ($this->masqueradeRuleExists($proxyHost, $proxyPort)) {
-                exec('iptables -t nat -D POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort));
-            }
+            // Flush the whole MASQUERADE chain — removes our rules for ANY host/port,
+            // so a settings change between enable and disable can't leave an orphan.
+            $this->teardownMasqueradeChain();
 
             exec("echo '0' > /proc/sys/net/ipv4/ip_forward");
 
@@ -246,8 +283,9 @@ class ProxyhelperController extends \frieren\core\Controller
             exec("iptables -t nat -A PREROUTING -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
         }
 
+        $this->ensureMasqueradeChain();
         if (!$this->masqueradeRuleExists($proxyHost, $proxyPort)) {
-            exec('iptables -t nat -A POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort));
+            exec('iptables -t nat -A ' . self::MASQ_CHAIN . ' ' . $this->masqueradeMatch($proxyHost, $proxyPort));
         }
 
         return self::setSuccess(['message' => "Port {$port} added"]);
