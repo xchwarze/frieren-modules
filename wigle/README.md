@@ -49,7 +49,7 @@ StatsCard ─────────────────────▶  us
 SettingsCard                       getSettings / setSettings → UCI
 
 All API calls share wigleApiGet($endpoint, $params):
-  curl -s -H "Authorization: Basic <token>" "https://api.wigle.net{endpoint}?{params}"
+  curl -s --connect-timeout 10 --max-time 20 -H "Authorization: Basic <token>" "https://api.wigle.net{endpoint}?{params}"
 ```
 
 All five search/stats tabs are fully implemented. The WiFi search results table renders each MAC as a link that opens the Network Detail modal. Frontend validates MAC format and country code (2-letter ISO) via yup before submitting.

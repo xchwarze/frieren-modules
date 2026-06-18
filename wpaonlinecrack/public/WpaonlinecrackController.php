@@ -22,8 +22,6 @@ class WpaonlinecrackController extends \frieren\core\Controller
         'checkOhcResults' => true,
     ];
 
-    const REPORT_PATH = '/tmp/fm-wpaonlinecrack-report.json';
-
     // OnlineHashCrack v2 API. add_tasks/list_tasks take JSON with an sk_ api key.
     // It accepts HASHES, not capture files, so caps are converted with
     // hcxpcapngtool to hashcat mode 22000 (WPA-PBKDF2-PMKID+EAPOL) before upload.
@@ -139,7 +137,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
             $files = [];
         }
 
-        $report = self::getReport();
+        $report = $this->getReport();
         $entries = [];
         foreach ($files as $file) {
             $entries[] = [
@@ -153,13 +151,44 @@ class WpaonlinecrackController extends \frieren\core\Controller
         ]);
     }
 
-    protected static function getReport()
+    /**
+     * Submission report path — stored in the module folder (survives reboot) rather
+     * than /tmp (where it was lost on every reboot, re-marking files as Pending).
+     */
+    protected function reportPath()
     {
-        if (file_exists(self::REPORT_PATH)) {
-            return json_decode(file_get_contents(self::REPORT_PATH), true) ?? [];
+        return self::getModulePath() . '/report.json';
+    }
+
+    protected function getReport()
+    {
+        $path = $this->reportPath();
+        if (file_exists($path)) {
+            return json_decode(file_get_contents($path), true) ?? [];
         }
 
         return [];
+    }
+
+    /**
+     * A capture is submittable only when it resolves to a real file inside one of the
+     * configured scan folders — blocks submitting an arbitrary readable path (exfiltration).
+     */
+    protected function isAllowedCapture($capture)
+    {
+        $real = realpath($capture);
+        if ($real === false || !is_file($real)) {
+            return false;
+        }
+
+        foreach ($this->getScanFolders() as $folder) {
+            $base = realpath($folder);
+            if ($base !== false && strpos($real, $base . '/') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function sendCap()
@@ -185,7 +214,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
             return self::setError('OnlineHashCrack requires hcxpcapngtool (install the hcxtools package).');
         }
 
-        $report = self::getReport();
+        $report = $this->getReport();
 
         $submitted = 0;
         $skipped = 0;
@@ -196,8 +225,9 @@ class WpaonlinecrackController extends \frieren\core\Controller
                 continue;
             }
 
-            // capture path comes from the request — must be a real existing file, escaped before use
-            if (!is_file($capture)) {
+            // capture path comes from the request — must resolve to a real file inside a
+            // configured scan folder (containment), escaped before use
+            if (!$this->isAllowedCapture($capture)) {
                 $failed++;
                 continue;
             }
@@ -208,7 +238,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
                 // -f makes curl exit non-zero on HTTP errors so exec() returns false, and -w appends the
                 // HTTP status code so we can confirm the server actually accepted the upload.
                 $result = self::setupCoreHelper()::exec(
-                    sprintf('curl -s -f -w "\nHTTP_STATUS:%%{http_code}" -X POST -F %s --cookie %s "https://wpa-sec.stanev.org/?submit"',
+                    sprintf('curl -s -f --connect-timeout 10 --max-time 30 -w "\nHTTP_STATUS:%%{http_code}" -X POST -F %s --cookie %s "https://wpa-sec.stanev.org/?submit"',
                         escapeshellarg("webfile=@{$capture}"),
                         escapeshellarg("key={$wpaSecKey}")
                     ),
@@ -239,7 +269,8 @@ class WpaonlinecrackController extends \frieren\core\Controller
             }
         }
 
-        file_put_contents(self::REPORT_PATH, json_encode($report));
+        file_put_contents($this->reportPath(), json_encode($report));
+        $this->logger("wpaonlinecrack submit: {$submitted} sent, {$skipped} skipped, {$failed} failed", 'info');
 
         return self::setSuccess([
             'submitted' => $submitted,
@@ -300,7 +331,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
             ]);
 
             $result = self::setupCoreHelper()::exec(
-                sprintf('curl -s -f -X POST -H %s -d %s %s',
+                sprintf('curl -s -f --connect-timeout 10 --max-time 30 -X POST -H %s -d %s %s',
                     escapeshellarg('Content-Type: application/json'),
                     escapeshellarg($payload),
                     escapeshellarg(self::OHC_API_URL)
@@ -336,7 +367,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
         ]);
 
         $output = self::setupCoreHelper()::exec(
-            sprintf('curl -s -f -X POST -H %s -d %s %s',
+            sprintf('curl -s -f --connect-timeout 10 --max-time 30 -X POST -H %s -d %s %s',
                 escapeshellarg('Content-Type: application/json'),
                 escapeshellarg($payload),
                 escapeshellarg(self::OHC_API_URL)
@@ -392,7 +423,7 @@ class WpaonlinecrackController extends \frieren\core\Controller
 
         // Potfile-style listing of cracked networks via the wpa-sec API endpoint.
         $output = self::setupCoreHelper()::exec(
-            sprintf('curl -s -f --cookie %s "https://wpa-sec.stanev.org/?api&dl=1"',
+            sprintf('curl -s -f --connect-timeout 10 --max-time 30 --cookie %s "https://wpa-sec.stanev.org/?api&dl=1"',
                 escapeshellarg("key={$wpaSecKey}")
             ),
             true,

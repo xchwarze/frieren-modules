@@ -4,9 +4,9 @@ A module for configuring SD card and USB storage on OpenWrt devices. USB Storage
 
 ## Features
 
-- **Auto-setup script** — runs a bundled `auto-setup.sh` script in the background that detects connected storage devices, creates partitions if needed, formats them as ext4, and configures mount points
-- **Real-time setup progress** — polls the setup log every second and streams output to the browser until the script completes
-- **Fstab editor** — reads and displays the current `/etc/config/fstab` content in an editable textarea; saving triggers an automatic `fstab` service restart to apply changes immediately
+- **Auto-setup script** — runs a bundled `auto-setup.sh` in the background that detects a connected storage device, partitions it (a 1 GB swap partition + an ext4 data partition), formats it, and configures the mount point and swap in fstab. Runs as a tracked background task via the framework's `BackgroundTaskHelper`
+- **Real-time setup progress** — polls the task log every second and streams output to the browser until the task completes
+- **Fstab editor** — reads and displays the current `/etc/config/fstab` in an editable textarea; saving runs a guarded update — it snapshots the current fstab, writes the new content, restarts the `fstab` service, and rolls back to the snapshot if the write or restart fails
 - **Dependency management** — checks for and installs the full set of required packages via opkg with progress polling
 
 ## Use Cases
@@ -32,23 +32,25 @@ All packages are installed via the module's dependency management system (opkg).
 
 ```
 Frontend                          Backend (PHP)
-────────────────────              ────────────────────────
+────────────────────              ──────────────────────────────
 SetupCard                         UsbstorageController
-  └─ Run auto setup ─────────────▶ startAutoSetup  → execBackground(auto-setup.sh)
-  └─ Progress output ◀─────────── getAutoSetupStatus → /tmp/auto_setup.log + flag file
-                                                       (1s poll until flag disappears)
+  └─ Run auto setup ─────────────▶ startAutoSetup     → BackgroundTaskHelper::start
+                                                          ("usbstorage-autosetup", sh auto-setup.sh)
+  └─ Progress output ◀──────────── getAutoSetupStatus → BackgroundTaskHelper status
+                                      /tmp/task-usbstorage-autosetup.{log,flag} (1s poll)
 ConfigCard
-  └─ Fstab textarea ◀──────────── getFstabConfig   → read /etc/config/fstab
-  └─ Save button ─────────────────▶ saveFstabConfig → write fstab + /etc/init.d/fstab restart
+  └─ Fstab textarea ◀──────────── getFstabConfig      → ModuleOpenWrtHelper::getFstabConfig
+  └─ Save button ─────────────────▶ saveFstabConfig    → ModuleOpenWrtHelper::saveFstabConfig
+                                      (snapshot → write → restart → rollback on failure)
 ```
 
-The auto-setup script creates a `/tmp/auto_setup.flag` file at startup and removes it on completion; the frontend polls `getAutoSetupStatus` every second and stops when `isRunning` flips to false.
+Liveness is tracked by the framework's `BackgroundTaskHelper`: the completion flag (`/tmp/task-usbstorage-autosetup.flag`) is set when the script exits, and the frontend polls `getAutoSetupStatus` every second until `isRunning` flips to false. A concurrency guard refuses a second run while one is in progress.
 
 ## Important Notes
 
-- The fstab editor writes content directly to `/etc/config/fstab` without syntax validation — malformed UCI content may break storage mounts on the next reboot
-- Take a manual backup of `/etc/config/fstab` before making edits if you are unsure of the format
+- The fstab editor does not validate UCI syntax, but it snapshots the current fstab before writing and rolls back if the service restart fails — a backup is also left at `/tmp/fstab.bak`. A config that is syntactically valid but semantically wrong can still misconfigure mounts on the next reboot
 - The auto-setup script only supports ext4 filesystems; NTFS, exFAT, and FAT32 are not supported
+- Auto-setup wipes the selected device — it picks the first present of `/dev/sdcard/sd`, `/dev/mmcblk0`, `/dev/sda` (external SD/USB on these gadgets) and formats it
 
 ## License
 

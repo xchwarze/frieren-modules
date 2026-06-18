@@ -8,7 +8,8 @@ A module for routing network traffic through an external interception proxy — 
 - **Routing toggle** — a single button enables or disables IP forwarding and all DNAT rules simultaneously; status is queried from the live iptables state on every page load
 - **Per-port management** — add or remove individual DNAT rules without toggling the entire routing setup; idempotent (uses `iptables -C` to avoid duplicate rules)
 - **NAT rule viewer** — displays the full raw output of `iptables -t nat -L -n -v` and a parsed list of active forwarded ports with their destinations
-- **Firewall backups** — each mutating operation (enable, disable, add port, delete port) auto-creates a timestamped `iptables-save` snapshot before applying changes
+- **Scoped NAT** — the MASQUERADE rule is matched to the proxied destination/port (`-d host -p tcp --dport port`), not applied globally to all outbound traffic
+- **Firewall backups** — each mutating operation (enable, disable, add port, delete port) auto-creates a timestamped `iptables-save` snapshot before applying changes; the newest 20 are kept (older auto-backups are pruned)
 - **Backup management** — list, restore, and delete named backup files from the UI; restore atomically replaces all iptables rules
 
 ## Use Cases
@@ -54,7 +55,7 @@ BackupsCard                         getBackups / backupFirewall / restoreFirewal
 Traffic flow when routing is enabled:
 
 ```
-Client → [PREROUTING: DNAT → proxy:8080] → [IP Forward] → [POSTROUTING: MASQUERADE] → Proxy
+Client → [PREROUTING: DNAT → proxy:8080] → [IP Forward] → [POSTROUTING: MASQUERADE -d proxy --dport 8080] → Proxy
 ```
 
 Firewall rules are **not persistent across reboots** — the routing toggle reflects the live iptables state on each page load.

@@ -8,6 +8,7 @@ A web UI for capturing network traffic from OpenWrt device interfaces using tcpd
 - **Capture options** — configure verbosity (`-v`/`-vv`/`-vvv`), hostname resolution (`-n`/`-nn`), timestamp format (`-t` through `-ttttt`), and advanced flags: hex+ASCII output, Ethernet headers, absolute sequence numbers, quiet mode, monitor mode
 - **Visual BPF filter builder** — construct Berkeley Packet Filter expressions from dropdowns for type, direction, protocol, length, kind, and logical operators; the resulting filter string is editable before use
 - **Live command preview** — shows the complete generated tcpdump command before execution
+- **Capture presets** — save the current capture configuration under a name and reload it later; operator presets are stored in the module directory (`presets.json`, up to 50)
 - **Asynchronous capture** — captures run as a background process; live stdout/stderr output is streamed to the browser every 5 seconds
 - **Stop capture** — terminate a running capture at any time
 - **pcap file download** — completed captures are saved as timestamped `.pcap` files; download any capture file directly from the browser for analysis in Wireshark or other tools
@@ -45,9 +46,10 @@ OutputCard (auto-scroll)  ◀──────  getCaptureHistory → list /roo
 HistoryCard                        getCaptureOutput → streamFile (pcap download)
                                    deleteCapture   → unlink file
                                    deleteAll       → unlink all files
+                                   getPresets / savePreset / deletePreset → presets.json
 ```
 
-Captures are written directly to pcap format via `-w {pcapFilePath}` and simultaneously to `/tmp/fm-tcpdump.log` for live polling. The `-z` postrotate flag is explicitly blocked on the backend to prevent command injection via the capture command.
+Captures are written directly to pcap format via `-w {pcapFilePath}` and simultaneously to `/tmp/fm-tcpdump.log` for live polling. The backend blocks the `-z` postrotate flag (arbitrary command execution) and rejects `-r` reading a savefile outside `/root/.tcpdump/` (arbitrary file read).
 
 ## License
 

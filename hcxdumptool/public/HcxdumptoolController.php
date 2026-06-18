@@ -40,6 +40,7 @@ class HcxdumptoolController extends \frieren\core\Controller
         'stopCapture' => true,
         'getCaptureHistory' => true,
         'getCaptureOutput' => true,
+        'extractHashes' => true,
         'getLogContent' => true,
         'deleteCapture' => true,
         'deleteAll' => true,
@@ -125,6 +126,7 @@ class HcxdumptoolController extends \frieren\core\Controller
             $this->runScriptPath,
             "#!/bin/sh\nhcxdumptool {$command}{$extraFlags} -w {$pcapFilePath} >> {$this->logPath} 2>&1\n"
         );
+        $this->logger("hcxdumptool capture started: {$filename}", 'info');
         OpenWrtHelper::execBackground('sh ' . escapeshellarg($this->runScriptPath));
 
         return self::setSuccess([
@@ -174,6 +176,41 @@ class HcxdumptoolController extends \frieren\core\Controller
         }
 
         $this->responseHandler->streamFile($filePath);
+    }
+
+    public function extractHashes()
+    {
+        // hcxtools ships hcxpcapngtool; it's a soft add-on, so guide the operator if missing.
+        if (!OpenWrtHelper::commandExists('hcxpcapngtool')) {
+            return self::setError('hcxpcapngtool not found. Install the hcxtools package.');
+        }
+
+        $captureName = basename($this->request['filename'] ?? '');
+        if ($captureName === '') {
+            return self::setError('No capture specified');
+        }
+
+        $capturePath = "{$this->pcapDirectory}/{$captureName}";
+        if (!file_exists($capturePath)) {
+            return self::setError("Could not find capture: {$capturePath}");
+        }
+
+        // Convert the capture to hashcat mode-22000 hashes. raw=true: the values are
+        // escapeshellarg'd and escapeshellcmd would corrupt them.
+        $hashPath = '/tmp/fm-hcxdumptool-hash.22000';
+        @unlink($hashPath);
+        OpenWrtHelper::exec(
+            sprintf('hcxpcapngtool -o %s %s', escapeshellarg($hashPath), escapeshellarg($capturePath)),
+            true,
+            true
+        );
+
+        if (!file_exists($hashPath) || filesize($hashPath) === 0) {
+            @unlink($hashPath);
+            return self::setError('No usable handshake/PMKID in this capture.');
+        }
+
+        $this->responseHandler->streamFile($hashPath);
     }
 
     public function getLogContent()

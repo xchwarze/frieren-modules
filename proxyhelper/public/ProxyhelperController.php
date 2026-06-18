@@ -43,8 +43,24 @@ class ProxyhelperController extends \frieren\core\Controller
         $filepath = "{$this->backupDirectory}/{$filename}";
 
         exec('iptables-save > ' . escapeshellarg($filepath));
+        $this->pruneBackups();
 
         return $filename;
+    }
+
+    /**
+     * Keep only the newest $keep auto-backups; timestamped names sort chronologically,
+     * so the oldest are at the front. Prevents the backup dir growing without bound
+     * (a backup is written on every toggle / port mutation).
+     */
+    private function pruneBackups($keep = 20)
+    {
+        $files = array_values(array_diff(scandir($this->backupDirectory), ['.', '..']));
+        sort($files);
+        $excess = count($files) - $keep;
+        for ($i = 0; $i < $excess; $i++) {
+            @unlink("{$this->backupDirectory}/{$files[$i]}");
+        }
     }
 
     private function dnatRuleExists($port, $destination)
@@ -56,9 +72,21 @@ class ProxyhelperController extends \frieren\core\Controller
         return $code === 0;
     }
 
-    private function masqueradeRuleExists()
+    /**
+     * POSTROUTING match scoped to the proxy destination/port, so we MASQUERADE only the
+     * proxied flow instead of every outbound packet. Add/delete/check use this same string
+     * to stay idempotent. All values escaped.
+     */
+    private function masqueradeMatch($proxyHost, $proxyPort)
     {
-        exec('iptables -t nat -C POSTROUTING -j MASQUERADE 2>/dev/null', $output, $code);
+        return '-d ' . escapeshellarg(trim($proxyHost))
+            . ' -p tcp --dport ' . escapeshellarg(trim($proxyPort))
+            . ' -j MASQUERADE';
+    }
+
+    private function masqueradeRuleExists($proxyHost, $proxyPort)
+    {
+        exec('iptables -t nat -C POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort) . ' 2>/dev/null', $output, $code);
 
         return $code === 0;
     }
@@ -109,6 +137,7 @@ class ProxyhelperController extends \frieren\core\Controller
 
         // Auto-backup current firewall state before mutating live rules
         $this->autoBackup($enabled ? 'before_enable' : 'before_disable');
+        $this->logger('proxyhelper routing ' . ($enabled ? 'enabled' : 'disabled') . " (proxy {$proxyHost}:{$proxyPort})", 'info');
 
         $destinationRaw = "{$proxyHost}:{$proxyPort}";
 
@@ -124,8 +153,8 @@ class ProxyhelperController extends \frieren\core\Controller
                 }
             }
 
-            if (!$this->masqueradeRuleExists()) {
-                exec("iptables -t nat -A POSTROUTING -j MASQUERADE");
+            if (!$this->masqueradeRuleExists($proxyHost, $proxyPort)) {
+                exec('iptables -t nat -A POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort));
             }
 
             return self::setSuccess(['message' => 'Routing enabled']);
@@ -139,8 +168,8 @@ class ProxyhelperController extends \frieren\core\Controller
                 }
             }
 
-            while ($this->masqueradeRuleExists()) {
-                exec("iptables -t nat -D POSTROUTING -j MASQUERADE");
+            while ($this->masqueradeRuleExists($proxyHost, $proxyPort)) {
+                exec('iptables -t nat -D POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort));
             }
 
             exec("echo '0' > /proc/sys/net/ipv4/ip_forward");
@@ -217,8 +246,8 @@ class ProxyhelperController extends \frieren\core\Controller
             exec("iptables -t nat -A PREROUTING -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
         }
 
-        if (!$this->masqueradeRuleExists()) {
-            exec("iptables -t nat -A POSTROUTING -j MASQUERADE");
+        if (!$this->masqueradeRuleExists($proxyHost, $proxyPort)) {
+            exec('iptables -t nat -A POSTROUTING ' . $this->masqueradeMatch($proxyHost, $proxyPort));
         }
 
         return self::setSuccess(['message' => "Port {$port} added"]);

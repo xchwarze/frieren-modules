@@ -20,7 +20,8 @@
     "OpenWrt"
   ],
   "dependencies": [
-    "hcxdumptool"
+    "hcxdumptool",
+    "hcxtools"
   ],
   "minPanelVersion": "1.0.0",
   "system": false,

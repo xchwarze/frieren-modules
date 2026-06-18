@@ -58,7 +58,7 @@ class WigleController extends \frieren\core\Controller
         $url = "https://api.wigle.net{$endpoint}{$queryString}";
 
         $command = sprintf(
-            'curl -s -H %s %s 2>&1',
+            'curl -s --connect-timeout 10 --max-time 20 -H %s %s 2>&1',
             escapeshellarg("Authorization: Basic {$token}"),
             escapeshellarg($url)
         );
@@ -71,6 +71,7 @@ class WigleController extends \frieren\core\Controller
         }
 
         if (isset($response['success']) && !$response['success']) {
+            $this->logger('wigle API error: ' . ($response['message'] ?? 'unknown'), 'warning');
             return ['error' => $response['message'] ?? 'WiGLE API error'];
         }
 

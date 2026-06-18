@@ -42,6 +42,7 @@ class UsbstorageController extends \frieren\core\Controller
 
         // Run via `sh <script>` (not the bare path) so the launch does not depend on
         // the script's +x bit, which a module install/extraction can strip.
+        $this->logger('usbstorage auto-setup started', 'info');
         BackgroundTaskHelper::start(self::TASK_AUTOSETUP, 'sh ' . escapeshellarg($scriptPath));
 
         return self::setSuccess();
@@ -73,6 +74,8 @@ class UsbstorageController extends \frieren\core\Controller
         if (!self::setupModuleHelper()::saveFstabConfig($this->request['config'])) {
             return self::setError('Error saving fstab config.');
         }
+
+        $this->logger('usbstorage fstab config saved', 'info');
 
         return self::setSuccess();
     }

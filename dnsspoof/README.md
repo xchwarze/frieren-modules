@@ -6,7 +6,9 @@ A module for manipulating the OpenWrt device's `/etc/hosts` file to redirect DNS
 
 - **View current hosts** — displays the active entries in `/etc/hosts` (first block, up to the first blank line)
 - **Add host entries** — maps a domain to an IP address with server-side validation: IP via `FILTER_VALIDATE_IP`, hostname via RFC-1123 regex (≤253 chars, dot-separated alnum/hyphen labels)
-- **Restart dnsmasq** — applies the modified hosts file by restarting the system DNS resolver
+- **Delete host entries** — removes an individual `{ip} {domain}` mapping from the managed block, without touching the rest of the file
+- **Wildcard spoofing** — maps `*.domain → IP` via a dnsmasq `address=/domain/ip` UCI entry (persists across reboot); add, list, and remove wildcard rules. Covers what `/etc/hosts` (exact match only) cannot
+- **Auto-apply** — adding or deleting a host (or wildcard) restarts dnsmasq automatically; the manual **Restart** action remains for explicit re-application
 - **Create snapshot** — backs up the current `/etc/hosts` to a persistent file in the module directory (survives reboot); only created once — will not overwrite an existing snapshot
 - **Rollback** — restores `/etc/hosts` from the last snapshot, reverting all changes made since the backup was taken
 
@@ -32,18 +34,21 @@ Frontend                       Backend (PHP)
 ────────────────────           ──────────────────────
 Hosts textarea (read-only)     DnsspoofController
 IP input + Domain input          fetchHosts     → reads /etc/hosts
-Add button ────────────────────▶ addHost        → validates + appends entry
+Add button ────────────────────▶ addHost        → validates + appends entry (+ auto-restart)
+Delete button ─────────────────▶ deleteHost     → removes matching {ip} {domain} (+ auto-restart)
+Wildcard add/list/remove ──────▶ addWildcard / fetchWildcards / removeWildcard
+                                    → uci dhcp.@dnsmasq[0].address '/domain/ip' (+ auto-restart)
 Restart button ────────────────▶ restartService → killall dnsmasq + init start
 Snapshot button ────────────────▶ createHostSnapshot → file copy (once)
 Rollback button ────────────────▶ rollbackHostsFromSnapshot → restore file
 ```
 
-Changes to `/etc/hosts` affect **all** DNS resolution on the device, not individual clients. A service restart is required after adding entries for them to take effect.
+Changes to `/etc/hosts` and the wildcard UCI list affect **all** DNS resolution on the device, not individual clients. Adds/deletes auto-restart dnsmasq so they take effect immediately.
 
 ## Important Notes
 
 - Modifying `/etc/hosts` affects every client using the device as its DNS server
-- There is no per-entry removal — rollback replaces the entire file
+- Individual entries can be removed with `deleteHost`; rollback is the separate "restore the whole snapshot" path
 - A snapshot is only written once; a second `createHostSnapshot` call is a no-op if a snapshot already exists
 - Entries are inserted into the first block of the hosts file; the module reads and writes only that block
 

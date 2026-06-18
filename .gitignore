@@ -27,3 +27,5 @@ dist-ssr
 /specs/
 /.claude/
 /.nelson/
+
+/docs/plans/

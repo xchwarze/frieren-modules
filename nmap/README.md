@@ -9,8 +9,10 @@ A web UI for running Nmap network scans directly from the OpenWrt device. The Nm
 - **Asynchronous execution** — scans run as a background process; the HTTP request returns immediately
 - **Real-time output streaming** — output is polled every 2 seconds and appended to an auto-scrolling terminal view
 - **Stop scan** — kill a running scan at any time with a single button click
-- **Timestamped history** — each completed scan is saved as a `.log` file under `/root/.nmap/`; the History tab lists all past scans
-- **View and delete history** — open any historical scan in the UI or delete individual files
+- **Structured output** — every scan also writes XML (`-oX`); the backend parses it into a hosts/ports/services table, viewable alongside the raw text
+- **Timestamped history** — each completed scan is saved under `/root/.nmap/`; the History tab lists all past scans
+- **View, download, and delete history** — open any historical scan, download its result file, delete individual files, or clear the entire history in one click
+- **Scan presets** — save the current scan configuration under a name and reload it later (`presets.json`, up to 50)
 - **Dependency management** — detects whether nmap is installed and provides a one-click opkg install if not
 
 ## Use Cases
@@ -41,11 +43,14 @@ CommandInput (preview)             startScan        → escapeshellcmd + execBac
 OutputCard (auto-scroll)  ◀──────  getLogContent    → read /tmp/nmap.log (2s poll)
 HistoryCard                        stopScan         → killall -9 nmap
                                    getHistory       → list /root/.nmap/
-                                   getHistoryContent→ read file by name
-                                   deleteHistory    → unlink file
+                                   getHistoryContent→ read file by name (raw -oN)
+                                   getHistoryStructured → parse -oX → hosts/ports/services
+                                   downloadResult   → streamFile (download)
+                                   deleteHistory / deleteAll → unlink
+                                   getPresets / savePreset / deletePreset → presets.json
 ```
 
-The backend appends `-oN {logfile}` to every scan command, saving results to `/root/.nmap/{datetime}.log` while simultaneously redirecting stdout/stderr to `/tmp/nmap.log` for live polling.
+The backend appends `-oN {logfile} -oX {xmlfile}` to every scan, saving results under `/root/.nmap/` while redirecting stdout/stderr to `/tmp/nmap.log` for live polling. The XML feeds the structured hosts/ports/services table; the raw `-oN` text remains the fallback view. Scan dir is created `0755`; user-supplied output flags (`-oN/-oX/-oA`) and filesystem `--script` paths are rejected.
 
 ## License
 

@@ -12,6 +12,7 @@ A web UI for capturing WiFi handshakes and PMKIDs passively using [hcxdumptool](
 - **Live log streaming** — output is polled every 5 seconds using a drain-and-truncate strategy: each poll reads the log then truncates it, keeping the in-RAM tmpfs file tiny even when `--rds` mode repaints continuously
 - **Stop capture** — terminate a running capture at any time with SIGKILL
 - **Timestamped capture history** — all captures are saved as `.pcapng` files under `/root/.hcxdumptool/`; browse and download from the History tab
+- **On-device hash extraction** — convert any capture to hashcat mode-22000 hashes with `hcxpcapngtool` and download them, closing the capture→hash loop without leaving the device (feeds hashcat or the WPA Online Crack module)
 - **Delete captures** — remove individual captures or clear the entire history
 - **Diagnostic commands** — run hardware probe commands as background tasks with progress polling; available commands are version-specific: 6.3.x exposes `-L` (list interfaces) and `-I <iface>` (per-interface detail); 6.2.x exposes `-I` (list interfaces), `-C` (show channels), and `--check_driver`; a Stop button cancels a hung probe
 - **Dependency management** — detects hcxdumptool binary presence and provides opkg install with destination selection (internal/SD)
@@ -30,6 +31,7 @@ A web UI for capturing WiFi handshakes and PMKIDs passively using [hcxdumptool](
 | Requirement | Notes |
 |-------------|-------|
 | `hcxdumptool` | Installed via opkg; compatible with 6.2.x and 6.3.x |
+| `hcxtools` | Provides `hcxpcapngtool` for on-device hash extraction; installed via opkg |
 | Monitor-mode capable wireless adapter | Required for packet capture |
 | `/root/.hcxdumptool/` | Auto-created on first use (0755) |
 | No UCI config | Module is stateless |

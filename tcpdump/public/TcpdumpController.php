@@ -49,9 +49,18 @@ class TcpdumpController extends \frieren\core\Controller
             return self::setError('The -z postrotate option is not allowed');
         }
 
+        // block tcpdump -r reading a savefile outside the capture dir (arbitrary file read)
+        if (preg_match('/(^|\s)-r[\s=]+(\S+)/', $this->request['command'], $m)) {
+            $readPath = trim($m[2], "'\"");
+            if (strpos($readPath, "{$this->pcapDirectory}/") !== 0) {
+                return self::setError('Reading capture files outside the module directory is not allowed');
+            }
+        }
+
         $filename = date('Y-m-d\TH-i-s') . '.pcap';
         $pcapFilePath = "{$this->pcapDirectory}/{$filename}";
         $command = escapeshellcmd($this->request['command']);
+        $this->logger("tcpdump capture started on {$filename}", 'info');
         OpenWrtHelper::execBackground("tcpdump {$command} -w {$pcapFilePath}", "{$this->logPath} 2>&1");
 
         return self::setSuccess([
