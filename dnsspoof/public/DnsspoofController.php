@@ -16,6 +16,11 @@ class DnsspoofController extends \frieren\core\Controller
     // first dnsmasq instance — persistent across reboot, unlike a /tmp conf-dir drop-in.
     private $wildcardConfList = 'dhcp.@dnsmasq[0].address';
 
+    // Guarded-commit snapshot: a bad dhcp commit can take dnsmasq (all DNS) down, so we
+    // snapshot the committed file and roll back if dnsmasq fails to come back up.
+    const DHCP_CONFIG = '/etc/config/dhcp';
+    const DHCP_BACKUP = '/tmp/fm-dnsspoof-dhcp.bak';
+
     public $endpointRoutes = [
         'createHostSnapshot' => true,
         'rollbackHostsFromSnapshot' => true,
@@ -167,9 +172,11 @@ class DnsspoofController extends \frieren\core\Controller
         // only the value is escapeshellarg'd.
         $value = escapeshellarg("/{$domain}/{$ip}");
         self::setupCoreHelper()::exec("uci add_list {$this->wildcardConfList}={$value}", true, true);
-        self::setupCoreHelper()::exec('uci commit dhcp', true, true);
+        if (!$this->commitDhcpGuarded()) {
+            return self::setError('Failed to apply wildcard: dnsmasq did not restart; configuration rolled back.');
+        }
+
         $this->logger("dnsspoof wildcard added: *.{$domain} -> {$ip}", 'info');
-        $this->restartDnsmasq();
 
         return self::setSuccess();
     }
@@ -191,8 +198,9 @@ class DnsspoofController extends \frieren\core\Controller
                 );
             }
         }
-        self::setupCoreHelper()::exec('uci commit dhcp', true, true);
-        $this->restartDnsmasq();
+        if (!$this->commitDhcpGuarded()) {
+            return self::setError('Failed to apply change: dnsmasq did not restart; configuration rolled back.');
+        }
 
         return self::setSuccess();
     }
@@ -205,6 +213,40 @@ class DnsspoofController extends \frieren\core\Controller
     {
         self::setupCoreHelper()::exec('killall dnsmasq');
         self::setupCoreHelper()::exec('/etc/init.d/dnsmasq start');
+    }
+
+    /**
+     * Commit a staged `dhcp` UCI change and restart dnsmasq as a guarded mutation:
+     * snapshot /etc/config/dhcp first, commit + restart, and if dnsmasq does not come
+     * back up, restore the snapshot (and revert any staged change) and restart again —
+     * so a bad wildcard value can never leave DNS down for every client.
+     *
+     * @return bool True when dnsmasq is running after the commit.
+     */
+    private function commitDhcpGuarded()
+    {
+        $previous = @file_get_contents(self::DHCP_CONFIG);
+        if ($previous !== false) {
+            @file_put_contents(self::DHCP_BACKUP, $previous);
+        }
+
+        self::setupCoreHelper()::exec('uci commit dhcp', true, true);
+        $this->restartDnsmasq();
+        sleep(1);
+
+        if (self::setupCoreHelper()::checkRunning('dnsmasq')) {
+            return true;
+        }
+
+        // dnsmasq failed to come up — restore the previous config, drop staged changes,
+        // and restart again so resolution recovers.
+        if ($previous !== false) {
+            file_put_contents(self::DHCP_CONFIG, $previous);
+            self::setupCoreHelper()::exec('uci revert dhcp', true, true);
+            $this->restartDnsmasq();
+        }
+
+        return false;
     }
 
     public function restartService()

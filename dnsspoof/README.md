@@ -7,7 +7,7 @@ A module for manipulating the OpenWrt device's `/etc/hosts` file to redirect DNS
 - **View current hosts** — displays the active entries in `/etc/hosts` (first block, up to the first blank line)
 - **Add host entries** — maps a domain to an IP address with server-side validation: IP via `FILTER_VALIDATE_IP`, hostname via RFC-1123 regex (≤253 chars, dot-separated alnum/hyphen labels)
 - **Delete host entries** — removes an individual `{ip} {domain}` mapping from the managed block, without touching the rest of the file
-- **Wildcard spoofing** — maps `*.domain → IP` via a dnsmasq `address=/domain/ip` UCI entry (persists across reboot); add, list, and remove wildcard rules. Covers what `/etc/hosts` (exact match only) cannot
+- **Wildcard spoofing** — maps `*.domain → IP` via a dnsmasq `address=/domain/ip` UCI entry (persists across reboot); add, list, and remove wildcard rules. Covers what `/etc/hosts` (exact match only) cannot. Writes to `/etc/config/dhcp` as a **guarded mutation**: the file is snapshotted before the commit and rolled back if dnsmasq fails to restart, so a bad entry can never leave DNS down for every client
 - **Auto-apply** — adding or deleting a host (or wildcard) restarts dnsmasq automatically; the manual **Restart** action remains for explicit re-application
 - **Create snapshot** — backs up the current `/etc/hosts` to a persistent file in the module directory (survives reboot); only created once — will not overwrite an existing snapshot
 - **Rollback** — restores `/etc/hosts` from the last snapshot, reverting all changes made since the backup was taken
