@@ -12,9 +12,11 @@ class ProxyhelperController extends \frieren\core\Controller
 {
     private $backupDirectory = '/root/.proxyhelper';
 
-    // Dedicated nat chain holding our scoped MASQUERADE rules, so disable can flush them
-    // all at once (orphan-proof) regardless of the host/port used at enable time.
+    // Dedicated nat chains holding our rules, so disable can flush them all at once
+    // (orphan-proof) regardless of the host/port used at enable time: one for the
+    // POSTROUTING MASQUERADE, one for the PREROUTING DNAT.
     const MASQ_CHAIN = 'FRIEREN_PROXY';
+    const DNAT_CHAIN = 'FRIEREN_PROXY_PRE';
 
     protected $endpointRoutes = [
         'getSettings' => true,
@@ -67,11 +69,41 @@ class ProxyhelperController extends \frieren\core\Controller
         }
     }
 
+    /**
+     * Ensure our dedicated DNAT chain exists and is jumped to from PREROUTING. Same
+     * isolation as the MASQUERADE chain — teardown can flush every DNAT we added.
+     */
+    private function ensureDnatChain()
+    {
+        exec('iptables -t nat -N ' . self::DNAT_CHAIN . ' 2>/dev/null');
+        exec('iptables -t nat -C PREROUTING -j ' . self::DNAT_CHAIN . ' 2>/dev/null', $output, $code);
+        if ($code !== 0) {
+            exec('iptables -t nat -A PREROUTING -j ' . self::DNAT_CHAIN);
+        }
+    }
+
+    /**
+     * Remove every DNAT rule we created plus the chain: flush it, drop the PREROUTING
+     * jump (draining duplicates), then delete the empty chain.
+     */
+    private function teardownDnatChain()
+    {
+        exec('iptables -t nat -F ' . self::DNAT_CHAIN . ' 2>/dev/null');
+        while (true) {
+            exec('iptables -t nat -C PREROUTING -j ' . self::DNAT_CHAIN . ' 2>/dev/null', $output, $code);
+            if ($code !== 0) {
+                break;
+            }
+            exec('iptables -t nat -D PREROUTING -j ' . self::DNAT_CHAIN . ' 2>/dev/null');
+        }
+        exec('iptables -t nat -X ' . self::DNAT_CHAIN . ' 2>/dev/null');
+    }
+
     private function dnatRuleExists($port, $destination)
     {
         $port = escapeshellarg(trim($port));
         $destination = escapeshellarg($destination);
-        exec("iptables -t nat -C PREROUTING -p tcp --dport {$port} -j DNAT --to-destination {$destination} 2>/dev/null", $output, $code);
+        exec('iptables -t nat -C ' . self::DNAT_CHAIN . " -p tcp --dport {$port} -j DNAT --to-destination {$destination} 2>/dev/null", $output, $code);
 
         return $code === 0;
     }
@@ -152,7 +184,8 @@ class ProxyhelperController extends \frieren\core\Controller
     public function getRoutingStatus()
     {
         $ipForward = trim(@file_get_contents('/proc/sys/net/ipv4/ip_forward'));
-        $natRules = trim(exec('iptables -t nat -L PREROUTING -n 2>/dev/null'));
+        // DNAT now lives in our dedicated chain, not PREROUTING directly.
+        $natRules = (string) shell_exec('iptables -t nat -S ' . self::DNAT_CHAIN . ' 2>/dev/null');
         $hasDnatRules = strpos($natRules, 'DNAT') !== false;
 
         return self::setSuccess([
@@ -180,12 +213,13 @@ class ProxyhelperController extends \frieren\core\Controller
         if ($enabled) {
             exec("echo '1' > /proc/sys/net/ipv4/ip_forward");
 
+            $this->ensureDnatChain();
             foreach ($forwardPorts as $port) {
                 // Idempotency: only append when the rule does not already exist
                 if (!$this->dnatRuleExists($port, $destinationRaw)) {
                     $portArg = escapeshellarg(trim($port));
                     $destination = escapeshellarg($destinationRaw);
-                    exec("iptables -t nat -A PREROUTING -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
+                    exec('iptables -t nat -A ' . self::DNAT_CHAIN . " -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
                 }
             }
 
@@ -196,17 +230,9 @@ class ProxyhelperController extends \frieren\core\Controller
 
             return self::setSuccess(['message' => 'Routing enabled']);
         } else {
-            foreach ($forwardPorts as $port) {
-                $portArg = escapeshellarg(trim($port));
-                $destination = escapeshellarg($destinationRaw);
-                // Delete every duplicate copy of the rule that may exist
-                while ($this->dnatRuleExists($port, $destinationRaw)) {
-                    exec("iptables -t nat -D PREROUTING -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
-                }
-            }
-
-            // Flush the whole MASQUERADE chain — removes our rules for ANY host/port,
+            // Flush both chains — removes our DNAT and MASQUERADE for ANY host/port,
             // so a settings change between enable and disable can't leave an orphan.
+            $this->teardownDnatChain();
             $this->teardownMasqueradeChain();
 
             exec("echo '0' > /proc/sys/net/ipv4/ip_forward");
@@ -227,11 +253,11 @@ class ProxyhelperController extends \frieren\core\Controller
     public function getForwardedPorts()
     {
         $output = [];
-        exec('iptables -t nat -S PREROUTING 2>/dev/null', $output);
+        exec('iptables -t nat -S ' . self::DNAT_CHAIN . ' 2>/dev/null', $output);
 
         $ports = [];
         foreach ($output as $line) {
-            // Parse appended DNAT rules: -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination 1.2.3.4:8080
+            // Parse our DNAT rules: -A FRIEREN_PROXY_PRE -p tcp --dport 80 -j DNAT --to-destination 1.2.3.4:8080
             if (strpos($line, '-j DNAT') === false || strpos($line, '--dport') === false) {
                 continue;
             }
@@ -277,10 +303,11 @@ class ProxyhelperController extends \frieren\core\Controller
         exec("echo '1' > /proc/sys/net/ipv4/ip_forward");
 
         $destinationRaw = "{$proxyHost}:{$proxyPort}";
+        $this->ensureDnatChain();
         if (!$this->dnatRuleExists($port, $destinationRaw)) {
             $portArg = escapeshellarg($port);
             $destination = escapeshellarg($destinationRaw);
-            exec("iptables -t nat -A PREROUTING -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
+            exec('iptables -t nat -A ' . self::DNAT_CHAIN . " -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
         }
 
         $this->ensureMasqueradeChain();
@@ -307,9 +334,9 @@ class ProxyhelperController extends \frieren\core\Controller
 
         $portArg = escapeshellarg($port);
         $destination = escapeshellarg($destinationRaw);
-        // Remove every matching DNAT rule for this port/destination pair
+        // Remove every matching DNAT rule for this port/destination pair from our chain
         while ($this->dnatRuleExists($port, $destinationRaw)) {
-            exec("iptables -t nat -D PREROUTING -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
+            exec('iptables -t nat -D ' . self::DNAT_CHAIN . " -p tcp --dport {$portArg} -j DNAT --to-destination {$destination}");
         }
 
         return self::setSuccess(['message' => "Port {$port} removed"]);
