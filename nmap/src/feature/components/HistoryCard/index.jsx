@@ -27,24 +27,43 @@ import useDebouncedValue from '@common/hooks/useDebouncedValue.js';
 import usePagination from '@common/hooks/usePagination.js';
 import useGetHistory from '@module/feature/hooks/getHistory.js';
 import useDeleteHistory from '@module/feature/hooks/deleteHistory.js';
+import useDeleteAll from '@module/feature/hooks/deleteAll.js';
 import useGetHistoryContent from '@module/feature/hooks/getHistoryContent.js';
+import useGetHistoryStructured from '@module/feature/hooks/getHistoryStructured.js';
+import useDownloadResult from '@module/feature/hooks/downloadResult.js';
 
 const HistoryCard = () => {
     const query = useGetHistory();
     const { mutate: deleteHistory, isPending: deleteHistoryRunning } = useDeleteHistory();
+    const { mutate: deleteAll, isPending: deleteAllRunning } = useDeleteAll();
+    const { mutate: downloadResult } = useDownloadResult();
     const [selectedFile, setSelectedFile] = useState(null);
+    const [viewMode, setViewMode] = useState('raw');
     const { data: fileContentData, isLoading: isLoadingContent } = useGetHistoryContent(selectedFile);
+    const { data: structuredData, isLoading: isLoadingStructured, isError: structuredError } =
+        useGetHistoryStructured(viewMode === 'table' ? selectedFile : null);
     const { data, isSuccess } = query;
 
     const handleOpenClick = (item) => {
         setSelectedFile(item);
+        setViewMode('raw');
     };
 
     const handleDeleteClick = (item) => {
         deleteHistory({ filename: item });
     };
 
+    const handleDownloadClick = (item) => {
+        downloadResult({ filename: item });
+    };
+
+    const handleDeleteAllClick = () => {
+        deleteAll();
+        setSelectedFile(null);
+    };
+
     const files = data?.files || [];
+    const hosts = structuredData?.hosts || [];
 
     const [searchTerm, setSearchTerm] = useState('');
     const debounced = useDebouncedValue(searchTerm);
@@ -67,6 +86,18 @@ const HistoryCard = () => {
                         onChange={setSearchTerm}
                         placeholder={'Search by filename...'}
                     />
+                    <div className={'mb-2 text-end'}>
+                        <Button
+                            icon={'trash-2'}
+                            title={'Delete History'}
+                            variant={'outline-danger'}
+                            size={'sm'}
+                            loading={deleteAllRunning}
+                            onClick={handleDeleteAllClick}
+                        >
+                            {'Delete History'}
+                        </Button>
+                    </div>
                     <PanelTable>
                         <thead>
                             <tr>
@@ -86,6 +117,12 @@ const HistoryCard = () => {
                                                     title={'Open'}
                                                     size={'sm'}
                                                     onClick={() => handleOpenClick(item)}
+                                                />
+                                                <Button
+                                                    icon={'download'}
+                                                    title={'Download'}
+                                                    size={'sm'}
+                                                    onClick={() => handleDownloadClick(item)}
                                                 />
                                                 <Button
                                                     icon={'trash-2'}
@@ -116,11 +153,72 @@ const HistoryCard = () => {
 
                     {selectedFile && (
                         <div className={'mt-4'}>
-                            <h5>File Content: {selectedFile}</h5>
-                            {isLoadingContent ? (
-                                <SkeletonBar width={600} height={120} barHeight={114} />
-                            ) : (
-                                <pre>{logContent || 'No content available.'}</pre>
+                            <div className={'d-flex justify-content-between align-items-center'}>
+                                <h5 className={'mb-0'}>{'File Content: '}{selectedFile}</h5>
+                                <ActionButtons>
+                                    <Button
+                                        icon={'file-text'}
+                                        title={'Raw'}
+                                        size={'sm'}
+                                        variant={viewMode === 'raw' ? 'primary' : 'outline-secondary'}
+                                        onClick={() => setViewMode('raw')}
+                                    />
+                                    <Button
+                                        icon={'list'}
+                                        title={'Table'}
+                                        size={'sm'}
+                                        variant={viewMode === 'table' ? 'primary' : 'outline-secondary'}
+                                        onClick={() => setViewMode('table')}
+                                    />
+                                </ActionButtons>
+                            </div>
+
+                            {viewMode === 'raw' && (
+                                isLoadingContent ? (
+                                    <SkeletonBar width={600} height={120} barHeight={114} />
+                                ) : (
+                                    <pre>{logContent || 'No content available.'}</pre>
+                                )
+                            )}
+
+                            {viewMode === 'table' && (
+                                isLoadingStructured ? (
+                                    <SkeletonBar width={600} height={120} barHeight={114} />
+                                ) : structuredError || hosts.length === 0 ? (
+                                    <p className={'mt-2'}>{'Structured output is not available for this scan.'}</p>
+                                ) : (
+                                    <PanelTable>
+                                        <thead>
+                                            <tr>
+                                                <th>{'Host'}</th>
+                                                <th>{'Port'}</th>
+                                                <th>{'State'}</th>
+                                                <th>{'Service'}</th>
+                                                <th>{'Version'}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {hosts.flatMap((host) => (
+                                                (host.ports || []).length > 0
+                                                    ? host.ports.map((port) => (
+                                                        <tr key={`${host.address}-${port.port}-${port.protocol}`}>
+                                                            <td>{host.hostname ? `${host.address} (${host.hostname})` : host.address}</td>
+                                                            <td>{`${port.port}/${port.protocol}`}</td>
+                                                            <td>{port.state}</td>
+                                                            <td>{port.service}</td>
+                                                            <td>{port.version}</td>
+                                                        </tr>
+                                                    ))
+                                                    : [(
+                                                        <tr key={host.address}>
+                                                            <td>{host.hostname ? `${host.address} (${host.hostname})` : host.address}</td>
+                                                            <td colSpan={4}>{'No open ports'}</td>
+                                                        </tr>
+                                                    )]
+                                            ))}
+                                        </tbody>
+                                    </PanelTable>
+                                )
                             )}
                         </div>
                     )}

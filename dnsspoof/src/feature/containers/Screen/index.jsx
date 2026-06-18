@@ -25,6 +25,9 @@ import useDeleteHost from '@module/feature/hooks/useDeleteHost';
 import useRestartService from '@module/feature/hooks/useRestartService';
 import useCreateHostSnapshot from '@module/feature/hooks/useCreateHostSnapshot';
 import useRollbackHostsFromSnapshot from '@module/feature/hooks/useRollbackHostsFromSnapshot';
+import useFetchWildcards from '@module/feature/hooks/useFetchWildcards';
+import useAddWildcard from '@module/feature/hooks/useAddWildcard';
+import useRemoveWildcard from '@module/feature/hooks/useRemoveWildcard';
 
 const dnsSpoofSchema = yup.object({
     ip: yup.string().required('IP Address is mandatory'),
@@ -62,11 +65,18 @@ const Screen = () => {
     const { mutate: snapshotMutation, isPending: snapshotPending } = useCreateHostSnapshot();
     const { mutate: rollbackMutation, isPending: rollbackPending } = useRollbackHostsFromSnapshot();
 
+    const wildcardsQuery = useFetchWildcards();
+    const { mutateAsync: addWildcardMutation } = useAddWildcard();
+    const { mutate: removeWildcard, isPending: removeWildcardPending } = useRemoveWildcard();
+
     const [pendingDelete, setPendingDelete] = useState(null);
+    const [pendingWildcardDelete, setPendingWildcardDelete] = useState(null);
 
     const entries = parseSpoofEntries(query?.data?.hosts);
+    const wildcards = wildcardsQuery?.data?.wildcards ?? [];
 
     return (
+      <>
         <PanelCard
             title={'DNS Spoof'}
             icon={'globe'}
@@ -172,6 +182,89 @@ const Screen = () => {
                 isConfirmLoading={deletePending}
             />
         </PanelCard>
+
+        <PanelCard
+            title={'DNS Wildcards'}
+            icon={'globe'}
+            subtitle={'Map *.domain to an IP via dnsmasq (covers all subdomains, unlike /etc/hosts).'}
+            refetch={wildcardsQuery.refetch}
+            isFetching={wildcardsQuery.isFetching}
+        >
+            <FormProvider schema={dnsSpoofSchema} onSubmit={addWildcardMutation} defaultValues={defaultValues}>
+                <Row className={'g-3'}>
+                    <Col md={6}>
+                        <InputField name={'domain'} label={'Domain'} placeholder={'example.com (matches *.example.com)'} />
+                    </Col>
+                    <Col md={6}>
+                        <InputField name={'ip'} label={'IP Address'} placeholder={'Enter IP address'} />
+                    </Col>
+                </Row>
+                <FormActions>
+                    <SubmitButton label={'Add Wildcard'} icon={'plus'} />
+                </FormActions>
+            </FormProvider>
+
+            <div className={'mt-4'}>
+                {wildcardsQuery.isSuccess ? (
+                    <PanelTable>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>IP</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {wildcards.length > 0 ? (
+                                wildcards.map((entry) => (
+                                    <tr key={`${entry.domain}-${entry.ip}`}>
+                                        <td><code>*.{entry.domain}</code></td>
+                                        <td><code>{entry.ip}</code></td>
+                                        <td>
+                                            <ActionButtons>
+                                                <Button
+                                                    icon={'trash-2'}
+                                                    title={'Remove'}
+                                                    variant={'outline-danger'}
+                                                    size={'sm'}
+                                                    loading={removeWildcardPending}
+                                                    onClick={() => setPendingWildcardDelete(entry)}
+                                                />
+                                            </ActionButtons>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={3}>No wildcard entries.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </PanelTable>
+                ) : (
+                    <SkeletonTable
+                        headers={['Domain', 'IP', 'Actions']}
+                        widths={[200, 140, 80]}
+                        rows={2}
+                    />
+                )}
+            </div>
+
+            <ConfirmationModal
+                show={pendingWildcardDelete !== null}
+                onHide={() => setPendingWildcardDelete(null)}
+                onConfirm={() => removeWildcard(
+                    { ip: pendingWildcardDelete.ip, domain: pendingWildcardDelete.domain },
+                    { onSettled: () => setPendingWildcardDelete(null) }
+                )}
+                title={'Remove wildcard'}
+                description={pendingWildcardDelete
+                    ? `Remove "*.${pendingWildcardDelete.domain}" -> ${pendingWildcardDelete.ip}?`
+                    : ''}
+                isConfirmLoading={removeWildcardPending}
+            />
+        </PanelCard>
+      </>
     );
 };
 

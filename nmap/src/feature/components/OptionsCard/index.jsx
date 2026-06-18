@@ -14,10 +14,13 @@
  * Modifications: Added options to manage Nmap scans, including Nmap related command options.
  */
 
+import { useState } from 'react';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
+import Form from 'react-bootstrap/Form';
 import Accordion from 'react-bootstrap/Accordion';
 import { useAtomValue } from 'jotai';
+import { useFormContext } from 'react-hook-form';
 import * as yup from 'yup';
 import PropTypes from 'prop-types';
 
@@ -33,6 +36,10 @@ import SubmitButton from '@src/components/Form/SubmitButton';
 import isRunningAtom from '@module/feature/atoms/isRunningAtom.js';
 import useStartScan from '@module/feature/hooks/startScan.js';
 import useStopScan from '@module/feature/hooks/stopScan.js';
+import useGetPresets from '@module/feature/hooks/getPresets.js';
+import useSavePreset from '@module/feature/hooks/savePreset.js';
+import useDeletePreset from '@module/feature/hooks/deletePreset.js';
+import { DEFAULT_PRESETS, DEFAULT_VALUES, PRESET_NAME_REGEX, presetKey } from '@module/feature/helpers/presets.js';
 import CommandInput from '@module/feature/components/CommandInput';
 
 const nmapSettingsSchema = yup.object({
@@ -40,24 +47,108 @@ const nmapSettingsSchema = yup.object({
     target: yup.string().required('Target is mandatory'),
 }).required();
 
+/**
+ * Preset bar: load a built-in or saved scan preset (resets the form), or save the
+ * current option set as a named device-persistent preset. The derived command string
+ * is not stored — the generator rebuilds it from the source fields. Lives inside FormProvider.
+ */
+const PresetBar = () => {
+    const { reset, getValues } = useFormContext();
+    const presetsQuery = useGetPresets();
+    const { mutate: savePreset, isPending: saving } = useSavePreset();
+    const { mutate: deletePreset, isPending: deleting } = useDeletePreset();
+    const [selected, setSelected] = useState('');
+    const [name, setName] = useState('');
+
+    const userPresets = (presetsQuery.data?.presets ?? []).map((preset) => ({ ...preset, builtin: false }));
+    const all = [...DEFAULT_PRESETS, ...userPresets];
+    const current = all.find((preset) => presetKey(preset) === selected);
+
+    const handleSelect = (key) => {
+        setSelected(key);
+        const preset = all.find((item) => presetKey(item) === key);
+        if (!preset) {
+            return;
+        }
+        reset({ ...DEFAULT_VALUES, ...(preset.values ?? {}), command: '' });
+        setName(preset.builtin ? '' : preset.name);
+    };
+
+    const handleSave = () => {
+        const values = { ...getValues() };
+        delete values.command;
+        savePreset({ name: name.trim(), values });
+    };
+
+    const handleDelete = () => {
+        if (!current || current.builtin) {
+            return;
+        }
+        deletePreset({ name: current.name }, { onSuccess: () => setSelected('') });
+    };
+
+    return (
+        <Row className={'g-3 align-items-end mb-3'}>
+            <Col xs={12} sm={5} md={4}>
+                <Form.Group>
+                    <Form.Label><span className={'me-1'}><Icon name={'bookmark'} /></span>Preset</Form.Label>
+                    <Form.Select value={selected} onChange={(event) => handleSelect(event.target.value)}>
+                        <option value={''}>Select a preset…</option>
+                        <optgroup label={'Built-in'}>
+                            {DEFAULT_PRESETS.map((preset) => (
+                                <option key={presetKey(preset)} value={presetKey(preset)}>{preset.name}</option>
+                            ))}
+                        </optgroup>
+                        {userPresets.length > 0 && (
+                            <optgroup label={'Saved'}>
+                                {userPresets.map((preset) => (
+                                    <option key={presetKey(preset)} value={presetKey(preset)}>{preset.name}</option>
+                                ))}
+                            </optgroup>
+                        )}
+                    </Form.Select>
+                </Form.Group>
+            </Col>
+            <Col xs={'auto'}>
+                <Button
+                    label={'Delete'}
+                    icon={'trash-2'}
+                    variant={'outline-danger'}
+                    disabled={!current || current.builtin || deleting}
+                    loading={deleting}
+                    onClick={handleDelete}
+                />
+            </Col>
+            <Col xs={12} sm={4} md={4}>
+                <Form.Group>
+                    <Form.Label><span className={'me-1'}><Icon name={'save'} /></span>Save as</Form.Label>
+                    <Form.Control
+                        value={name}
+                        placeholder={'Preset name'}
+                        onChange={(event) => setName(event.target.value)}
+                    />
+                </Form.Group>
+            </Col>
+            <Col xs={'auto'}>
+                <Button
+                    label={'Save'}
+                    icon={'save'}
+                    variant={'outline-primary'}
+                    disabled={!PRESET_NAME_REGEX.test(name.trim()) || saving}
+                    loading={saving}
+                    onClick={handleSave}
+                />
+            </Col>
+        </Row>
+    );
+};
+
 const OptionsCard = ({ statusQuery }) => {
     const isRunning = useAtomValue(isRunningAtom);
     const { mutate: startScan } = useStartScan();
     const { mutate: stopScan, isPending: stopScanRunning } = useStopScan();
 
-    const defaultValues = {
-        command: '',
-        target: '',
-        verbose: false,
-        osDetection: false,
-        serviceVersion: false,
-        traceroute: false,
-        timing: '',
-        scanType: '',
-        topPorts: '',
-        script: '',
-        customOptions: '',
-    };
+    const defaultValues = DEFAULT_VALUES;
 
     return (
         <PanelCard
@@ -67,6 +158,7 @@ const OptionsCard = ({ statusQuery }) => {
             isFetching={statusQuery.isFetching}
         >
             <FormProvider schema={nmapSettingsSchema} onSubmit={startScan} defaultValues={defaultValues}>
+                <PresetBar />
                 <Accordion defaultActiveKey={'basic'} alwaysOpen={true}>
                     <Accordion.Item eventKey={'basic'}>
                         <Accordion.Header><span className={'me-2'}><Icon name={'sliders'} /></span>Basic Options</Accordion.Header>

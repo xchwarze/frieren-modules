@@ -21,12 +21,14 @@ import useGetCaptureHistory from '@module/feature/hooks/useGetCaptureHistory.js'
 import useDeleteCapture from '@module/feature/hooks/useDeleteCapture.js';
 import useDeleteAll from '@module/feature/hooks/useDeleteAll.js';
 import useDownloadCaptureOutput from '@module/feature/hooks/useDownloadCaptureOutput.js';
+import useExtractHashes from '@module/feature/hooks/useExtractHashes.js';
 
 const CaptureHistory = () => {
     const query = useGetCaptureHistory();
     const { mutate: deleteHistory, isPending: deleteHistoryRunning } = useDeleteCapture();
     const { mutate: deleteAll, isPending: deleteAllRunning } = useDeleteAll();
     const { mutate: downloadCapture, isPending: downloadCaptureRunning } = useDownloadCaptureOutput();
+    const { mutate: extractHashes, isPending: extractHashesRunning } = useExtractHashes();
     const { data, isSuccess } = query;
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebouncedValue(searchTerm);
@@ -47,6 +49,12 @@ const CaptureHistory = () => {
     const handleDownloadClick = (item) => {
         downloadCapture({
             outputFile: item,
+        });
+    };
+
+    const handleExtractClick = (item) => {
+        extractHashes({
+            filename: item,
         });
     };
 
@@ -84,6 +92,13 @@ const CaptureHistory = () => {
                                                     title={'Download'}
                                                     size={'sm'}
                                                     onClick={() => handleDownloadClick(item)}
+                                                />
+                                                <Button
+                                                    icon={'key'}
+                                                    title={'Extract hashes (.22000)'}
+                                                    size={'sm'}
+                                                    loading={extractHashesRunning}
+                                                    onClick={() => handleExtractClick(item)}
                                                 />
                                                 <Button
                                                     icon={'trash-2'}
