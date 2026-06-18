@@ -220,11 +220,21 @@ class NmapController extends \frieren\core\Controller
 
         $hosts = [];
         foreach ($xml->host as $host) {
+            // Prefer the IP address; fall back to whatever is present (e.g. mac-only),
+            // since a host can list both an ipv4/ipv6 and a mac address node.
             $address = '';
             foreach ($host->address as $addr) {
-                $address = (string) ($addr['addr'] ?? '');
-                if ($address !== '') {
+                $type = (string) ($addr['addrtype'] ?? '');
+                $value = (string) ($addr['addr'] ?? '');
+                if ($value === '') {
+                    continue;
+                }
+                if ($type === 'ipv4' || $type === 'ipv6') {
+                    $address = $value;
                     break;
+                }
+                if ($address === '') {
+                    $address = $value;
                 }
             }
 
