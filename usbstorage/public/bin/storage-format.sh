@@ -192,14 +192,14 @@ storage_activation_guard() {
         fi
     fi
     storage_mount_snapshot || {
-        storage_format_error 'Cannot establish complete process mount-namespace visibility.'; return 1;
+        storage_format_error 'Cannot read or validate host mount information.'; return 1;
     }
     ST_USAGE=
-    if ! { storage_collect_foreign_usage && storage_collect_loop_usage; }; then
-        storage_format_error 'Cannot resolve live foreign mounts or loop ownership.'; return 1;
+    if ! storage_collect_loop_usage; then
+        storage_format_error 'Cannot resolve live loop ownership.'; return 1;
     fi
     if printf '%s\n' "$ST_USAGE" | awk -v id="$1" '$1==id {busy=1} END {exit !busy}'; then
-        storage_format_error 'Selected device acquired foreign mount or loop usage.'; return 1
+        storage_format_error 'Selected device acquired loop usage.'; return 1
     fi
     sf_disk_mm=$(storage_block_mm "/dev/$1") || return 1
     sf_swap_mm=$(storage_block_mm "$SF_SWAP") || return 1

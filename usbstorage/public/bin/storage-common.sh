@@ -7,10 +7,6 @@
 # Readers are deliberately small. Installed callers use only these real paths.
 storage_read_file() { cat "$1"; }
 storage_realpath() { readlink -f "$1"; }
-storage_readlink() { readlink "$1"; }
-# BusyBox test/ash on the OpenWrt target provides this read-only inode comparison.
-# shellcheck disable=SC3013
-storage_same_file() { [ "$1" -ef "$2" ]; }
 storage_path_exists() { [ -e "$1" ]; }
 storage_is_symlink() { [ -L "$1" ]; }
 storage_is_block() { [ -b "$1" ]; }
@@ -355,55 +351,6 @@ EOF
     esac
 )
 
-# Process mountinfo is root-filtered by the kernel. A namespace needs a
-# representative rooted at the host /, not merely any readable jailed process.
-# Two process/thread scans catch newly observed namespaces; this is not an
-# atomic snapshot against external root, or coverage of processless handles.
-storage_namespace_id() (
-    value=$(storage_readlink "$1/ns/mnt") || return 1
-    printf '%s\n' "$value" | LC_ALL=C awk '
-        /^mnt:\[[0-9]+\]$/ {ok=1} END {exit !(ok && NR==1)}' || return 1
-    printf '%s\n' "$value"
-)
-storage_task_without_namespace() (
-    status=$(storage_read_file "$1/status") || return 1
-    printf '%s\n' "$status" | awk -v tid="${1##*/}" '
-        $1=="Pid:" && $2==tid {pid++}
-        $1=="Kthread:" && $2==1 {kernel++}
-        $1=="State:" && ($2=="Z" || $2=="X") {dead++}
-        END {exit !(pid==1 && (kernel==1 || dead==1))}'
-)
-storage_namespace_views() (
-    processes=$(storage_list_dir /proc) || return 1
-    while IFS= read -r pid; do
-        case "$pid" in ''|*[!0-9]*) continue;; esac
-        tasks=$(storage_list_dir "/proc/$pid/task") || {
-            storage_path_exists "/proc/$pid" && return 1
-            continue
-        }
-        [ -n "$tasks" ] || return 1
-        while IFS= read -r tid; do
-            storage_uint "$tid" || return 1
-            task=/proc/$pid/task/$tid
-            # Kernel workers and zombies may retain an nsproxy but no fs root.
-            storage_task_without_namespace "$task" 2>/dev/null && continue
-            if ! ns=$(storage_namespace_id "$task" 2>/dev/null); then
-                if storage_path_exists "$task"; then
-                    storage_task_without_namespace "$task" || return 1
-                fi
-                continue
-            fi
-            [ "$ns" = "$(storage_namespace_id "$task")" ] || return 1
-            # '-' records an observed namespace, but cannot establish coverage.
-            if storage_same_file "$task/root" /proc/1/root; then printf '%s %s\n' "$ns" "$task"
-            else printf '%s -\n' "$ns"; fi
-        done <<EOF
-$tasks
-EOF
-    done <<EOF
-$processes
-EOF
-)
 storage_parse_mounts() {
     LC_ALL=C awk '
         {sep=0;for(i=7;i<=NF;i++)if($i=="-"){sep=i;break}
@@ -413,102 +360,10 @@ storage_parse_mounts() {
         END {if(NR==0)exit 1}'
 }
 storage_mount_snapshot() {
-    ST_MOUNTS=; ST_FOREIGN_MOUNTS=
+    # Host-only usage: run on the router, not inside a container or chroot.
+    ST_MOUNTS=
     st_raw=$(storage_read_file /proc/self/mountinfo) || return 1
     ST_MOUNTS=$(printf '%s\n' "$st_raw" | storage_parse_mounts) || return 1
-    # A restricted or nested procfs cannot enumerate host processes. Kernel
-    # kthreadd exists only in the initial PID namespace; users cannot set Kthread.
-    st_init=$(storage_read_file /proc/2/status) || return 1
-    printf '%s\n' "$st_init" | awk '
-        $1=="Name:" && $2=="kthreadd" {name++}
-        $1=="Pid:" && $2==2 {pid++}
-        $1=="Kthread:" && $2==1 {kernel++}
-        END {exit !(name==1 && pid==1 && kernel==1)}' || return 1
-    printf '%s\n' "$ST_MOUNTS" | awk '
-        $2=="/proc" && $3=="proc" {
-            proc++;n=split($5,a,",")
-            for(i=1;i<=n;i++)if((a[i]~/^hidepid=/ && a[i]!="hidepid=0") || a[i]~/^subset=/)bad=1
-        } END {exit !(proc==1 && !bad)}' || return 1
-    # A self/root link can spell '/' even in a chroot. Stock test -ef compares
-    # both st_dev and st_ino against initial PID 1's root, not that spelling.
-    storage_same_file /proc/self/root /proc/1/root || return 1
-    st_self_ns=$(storage_namespace_id /proc/self) || return 1
-    st_views=$(storage_namespace_views) || return 1
-    st_covered=$st_self_ns
-    while read -r st_ns st_task; do
-        if [ -z "$st_ns" ] || [ "$st_task" = - ]; then continue; fi
-        storage_contains "$st_covered" "$st_ns" && continue
-        [ "$(storage_namespace_id "$st_task")" = "$st_ns" ] &&
-            storage_same_file "$st_task/root" /proc/1/root || return 1
-        st_raw=$(storage_read_file "$st_task/mountinfo") || return 1
-        st_mounts=$(printf '%s\n' "$st_raw" | storage_parse_mounts) || return 1
-        [ "$(storage_namespace_id "$st_task")" = "$st_ns" ] &&
-            storage_same_file "$st_task/root" /proc/1/root || return 1
-        ST_FOREIGN_MOUNTS="$ST_FOREIGN_MOUNTS
-$st_mounts"
-        st_covered="$st_covered
-$st_ns"
-    done <<EOF
-$st_views
-EOF
-    st_fresh_views=$(storage_namespace_views) || return 1
-    while read -r st_ns st_task; do
-        [ -n "$st_ns" ] || continue
-        storage_contains "$st_covered" "$st_ns" || return 1
-    done <<EOF
-$st_views
-$st_fresh_views
-EOF
-    [ "$(storage_namespace_id /proc/self)" = "$st_self_ns" ] &&
-        storage_same_file /proc/self/root /proc/1/root
-}
-storage_foreign_backing() (
-    read -r mm point fs source options <<EOF
-$1
-EOF
-    [ "$fs" != btrfs ] || return 1
-    case "$mm" in 0:*) ;; *)
-        # A source path belongs to the other root. Only the kernel identity is
-        # meaningful here, even when that spelling happens to exist in our root.
-        node=$(storage_node_mm "$mm") || return 1
-        storage_backing_node "$node" 0; return $?;;
-    esac
-    case "$fs" in
-        proc|sysfs|tmpfs|ramfs|devtmpfs|devpts|cgroup|cgroup2|debugfs|tracefs|securityfs|configfs|pstore|bpf|mqueue|hugetlbfs|fusectl|binfmt_misc|nsfs) return 0;;
-    esac
-    # A kernel UBI number/name is global evidence; a foreign /dev alias is not.
-    # Character-backed anonymous filesystems need the same-superblock proof
-    # below if the source is a pathname, even when our root has that pathname.
-    case "$fs:$source" in ubifs:ubi[0-9]*:*) storage_flash "$source"; return $?;; esac
-    # Reuse proof only for the very same anonymous superblock and options.
-    # Never interpret foreign overlay paths against the formatter's root.
-    while read -r self_mm self_point self_fs self_source self_options; do
-        if [ "$self_mm:$self_fs:$self_source:$self_options" = "$mm:$fs:$source:$options" ]; then
-            storage_backing_mount "$self_mm $self_point $self_fs $self_source $self_options" 0
-            return $?
-        fi
-    done <<EOF
-$ST_MOUNTS
-EOF
-    return 1
-)
-storage_collect_foreign_usage() {
-    while IFS= read -r st_mount; do
-        [ -n "$st_mount" ] || continue
-        st_backing=$(storage_foreign_backing "$st_mount") || return 1
-        read -r _st_foreign_mm st_foreign_point _st_foreign_rest <<EOF
-$st_mount
-EOF
-        while IFS= read -r st_disk; do
-            case "$st_disk" in ''|flash|memory) continue;; esac
-            ST_USAGE="$ST_USAGE
-$st_disk mount $st_foreign_point"
-        done <<EOF
-$st_backing
-EOF
-    done <<EOF
-$ST_FOREIGN_MOUNTS
-EOF
 }
 storage_collect_loop_usage() {
     # Configured loops need not appear in the backing device's sysfs holders.
@@ -561,8 +416,7 @@ EOF
     done <<EOF
 $ST_NODES
 EOF
-    storage_mount_snapshot 2>/dev/null || storage_error 'Cannot establish complete process mount-namespace visibility.'
-    storage_collect_foreign_usage 2>/dev/null || storage_error 'Cannot resolve foreign mounted backing storage.'
+    storage_mount_snapshot 2>/dev/null || storage_error 'Cannot read or validate host mount information.'
     storage_collect_loop_usage 2>/dev/null || storage_error 'Cannot resolve configured loop ownership.'
     st_root_seen=; st_system_proven=
     while read -r st_mm st_point st_fs st_source st_options; do

@@ -22,6 +22,7 @@ class FormattingFixture(StorageFixture):
         (self.entry / "storage-common.sh").write_text(
             f". {shlex.quote(str(COMMON))}\n" + self.readers + r'''
 storage_read_file() {
+    printf '%s\n' "$1" >> "$FX/reads"
     [ "$1" != /proc/self/mountinfo ] || fx-collect /proc/self/mountinfo || return 1
     cat "$FX$1"
 }
@@ -112,6 +113,31 @@ storage_swap_writer() { fx-mkswap "$@"; }
 
 
 class FormattingTests(FormattingFixture):
+
+    def test_host_entrypoints_need_no_process_or_namespace_evidence(self):
+        self.disk("mmcblk0", "179:0", "mmc", "0")
+        self.disk("mmcblk1", "179:8", "sd")
+        self.partition("mmcblk0", "mmcblk0p2", "179:2", number=2)
+        self.mounts = ["1 0 179:2 / / rw - ext4 /dev/root rw"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", "root=/dev/mmcblk0p2")
+        for entry in ("format-device.sh", "auto-setup.sh"):
+            with self.subTest(entry=entry):
+                result = self.invoke(entry)
+                proc_reads = {path for path in (self.root / "reads").read_text().splitlines()
+                              if path == "/proc" or path.startswith("/proc/")}
+                self.assertEqual(proc_reads, {"/proc/self/mountinfo", "/proc/swaps", "/proc/cmdline",
+                                              "/proc/sys/kernel/random/boot_id"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                expected = [["fdisk", "/dev/sda"], ["mkswap", "/dev/sda1"],
+                            ["mkfs.ext4", "-F", "/dev/sda2"]]
+                if entry == "auto-setup.sh":
+                    expected += [["mount", "/dev/sda2", "/sd"], ["swapon", "/dev/sda1"]]
+                self.assertEqual(self.writers(), expected)
+                self.assertFalse((self.root / "setup.lock").exists())
+                self.reset_mutation()
+                (self.root / "calls").unlink()
+                (self.root / "reads").unlink()
 
     def test_both_entrypoints_require_exact_explicit_selection(self):
         for entry in ("auto-setup.sh", "format-device.sh"):
@@ -432,13 +458,6 @@ def mutate(mode):
         (root / "sd/foreign.swap").write_text("fixture unexpected swapfile")
         with (root / "proc/swaps").open("a") as file:
             file.write("/sd/foreign.swap file 100 0 -2\n")
-    elif mode == "foreign-mount":
-        base = root / "proc/4321/task/4321"
-        (base / "ns").mkdir(parents=True, exist_ok=True)
-        (base / "ns/mnt").write_text("mnt:[200]")
-        if not (base / "root").exists():
-            (base / "root").symlink_to(root)
-        (base / "mountinfo").write_text("1 0 8:1 / /private rw - ext4 /jail-device rw\n")
     elif mode == "configured-loop":
         base = root / "sys/devices/virtual/block/loop0"
         for directory in ("holders", "slaves", "loop"):

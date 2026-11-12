@@ -4,6 +4,17 @@
 
 Resolve xchwarze/frieren-modules#4 without retaining automatic formatting of the first matching device. Separate read-only discovery, explicit user selection, and guarded formatting. The same safety policy must protect the web workflow and direct script use.
 
+## User-directed simplification
+
+The user's latest instruction is to keep this generic and simple for OpenWrt, without overengineering. This section replaces the earlier process-wide namespace-coverage requirements and related review rulings.
+
+- Target normal storage administration on the OpenWrt host. Do not build a general Linux container/chroot/namespace inspection system, enumerate processes or threads, prove namespace-root reachability, or add router-model exceptions.
+- Use the host's current `/proc/self/mountinfo`, `/proc/swaps`, sysfs, and UCI configuration. Retain system-disk/eMMC protection, mounted/swap/held/read-only refusals, explicit selection/confirmation, identity rechecks, one operation lock, and selected-only fstab updates.
+- Mounts hidden in other namespaces or chroots are outside this simpler contract. Document that limitation plainly; do not describe the old I1 issue as technically fixed or claim complete process-wide visibility. Run setup on the router host, not in a container or jail.
+- Retain the existing working root/partition/USB policy where needed for ordinary OpenWrt. Do not expand virtual-storage or filesystem support. Keep unsupported or unresolved system backing fail-closed.
+- Keep the UI/API and safe test contracts unchanged. Remove only tests and fixture machinery belonging to the explicitly dropped namespace feature; preserve the actual device-selection and destructive-boundary safety coverage.
+- Make one focused simplification and one bounded review. Do not restart the completed implementation tasks or repeat a general-purpose Linux audit.
+
 ## Approved product decisions
 
 - Allow positively identified USB storage unless the kernel marks its connection as fixed/internal, and allow positively identified removable SD cards. USB devices with unknown physical connection location remain eligible only after all other safety checks and explicit user confirmation; expose that uncertainty in the UI.
@@ -106,10 +117,10 @@ Keep package and manifest versions consistent when preparing the module change. 
 
 The builder chooses helper names, exact structured inventory encoding, identity-token representation, and the smallest practical test tools consistent with this policy and existing module conventions. Do not add production safety bypasses to make tests easier. Escalate any inability to identify backing storage or device generations on supported OpenWrt versions rather than weakening the fail-closed policy silently.
 
-## Final-review capability rulings
+## Retained OpenWrt capability requirements
 
-- Supplement self mountinfo with two scans of host-visible processes and threads. Each observed mount namespace needs a readable full-host-root representative; a chroot-only view is not complete. Resolve foreign block mounts by kernel device identity, not foreign source spelling. Unrelated resolvable namespaces must retain eligible USB/SD. Refuse incomplete visibility, restricted/nested procfs, and unresolved ownership. Processless namespace handles and atomic protection against external root races are not claimed.
-- Reverse-resolve all configured loops independently of mount/swap reachability and sysfs holders. Repeat loop and namespace coverage at destructive and activation boundaries.
+- Validate one fresh host `/proc/self/mountinfo` snapshot for inventory and each destructive/activation recheck. Preserve that snapshot for swapfile backing resolution. Hidden namespace/chroot mounts remain outside scope; the old I1/R1 concern is not claimed fixed.
+- Reverse-resolve all configured loops independently of mount/swap reachability and sysfs holders. Repeat loop ownership checks at destructive and activation boundaries.
 - Keep canonical rdev checks with stock read-only numeric `ls -dnL`; do not add an inventory-only dependency. Refuse unsupported UCI target encodings without evaluating them.
 - Declare formatter dependency `swap-utils` and explicitly invoke its OpenWrt 24.10 `/usr/sbin/mkswap`. Verify UUID capability before partition-table destruction, including the libuuid parser rather than help text alone. Keep nonzero, distinct, uniquely owned selected UUIDs mandatory.
 - Use location evidence from the storage USB attachment, not an intermediate hub's own fixed attachment. Keep fixed storage refused and unknown-location warnings unchanged.

@@ -1,6 +1,5 @@
 """Final-review boundary regressions. All kernel/tool evidence is synthetic."""
 
-import json
 import shlex
 
 from test_storage import COMMON, IDENTITY, StorageFixture
@@ -8,133 +7,6 @@ import test_formatting as formatting
 
 
 class FinalPolicyTests(StorageFixture):
-    def namespace(self, rows, root="/", pid="4321", tid=None):
-        tid = tid or pid
-        base = f"/proc/{pid}/task/{tid}"
-        self.write(base + "/ns/mnt", "mnt:[200]")
-        (self.root / root.lstrip("/")).mkdir(parents=True, exist_ok=True)
-        self.link(base + "/root", root)
-        self.write(base + "/mountinfo", "\n".join(rows) + "\n")
-        return base
-
-    def test_foreign_mount_uses_rdev_not_foreign_source_spelling(self):
-        self.partition()
-        self.disk("sdb", "8:16")
-        # In the other root /dev/sdb means sda1. Never resolve that spelling here.
-        self.namespace(["1 0 8:1 / /private rw - ext4 /dev/sdb rw"])
-        self.assertFalse(self.device()["eligible"])
-        self.assertEqual(self.device()["mounts"], ["/private"])
-        self.assertTrue(self.device("sdb")["eligible"])
-
-    def test_unrelated_private_namespace_keeps_usb_and_sd_eligible(self):
-        self.disk("sdb", "8:16")
-        self.disk("mmcblk1", "179:8", "sd")
-        self.namespace(["1 0 8:16 / /private rw - ext4 /not-in-host-root rw",
-                        "2 1 0:22 / /tmp rw - tmpfs tmpfs rw"])
-        self.assertTrue(self.device()["eligible"])
-        self.assertTrue(self.device("mmcblk1")["eligible"])
-        self.assertFalse(self.device("sdb")["eligible"])
-
-    def test_foreign_thread_namespace_is_not_hidden_by_process_leader(self):
-        self.namespace(["1 0 0:22 / / rw - tmpfs tmpfs rw"])
-        base = self.namespace(["1 0 8:0 / /private rw - ext4 /in-jail rw"], tid="4322")
-        self.write(base + "/ns/mnt", "mnt:[201]")
-        self.assertFalse(self.device()["eligible"])
-
-    def test_missing_foreign_mountinfo_or_uncovered_chroot_refuses(self):
-        base = self.namespace(["1 0 0:22 / / rw - tmpfs tmpfs rw"])
-        file = self.root / (base + "/mountinfo").lstrip("/")
-        file.unlink()
-        self.assert_global_error()
-        file.write_text("1 0 0:22 / / rw - tmpfs tmpfs rw\n")
-        (self.root / (base + "/root").lstrip("/")).unlink()
-        (self.root / "jail").mkdir()
-        self.link(base + "/root", "/jail")
-        self.assert_global_error()
-
-    def test_chroot_process_allowed_when_full_root_representative_covers_namespace(self):
-        self.namespace(["1 0 0:22 / / rw - tmpfs tmpfs rw"], root="/jail")
-        self.namespace(["1 0 0:22 / / rw - tmpfs tmpfs rw"], pid="4323")
-        self.assertTrue(self.device()["eligible"])
-
-    def test_restricted_proc_or_noninitial_pid_view_refuses(self):
-        path = self.root / "proc/self/mountinfo"
-        original = path.read_text()
-        path.write_text(original.replace("- proc proc rw", "- proc proc rw,hidepid=2"))
-        self.assert_global_error()
-        path.write_text(original)
-        self.write("/proc/2/status", "Name:\tworker\nPid:\t2\nKthread:\t0\n")
-        self.assert_global_error()
-
-    def test_self_root_spelling_is_not_host_root_identity_proof(self):
-        # readlink of self/root is '/' even inside a chroot. Initial PID
-        # visibility does not make that chroot the host's full-root view.
-        (self.root / "proc/self/root").unlink()
-        (self.root / "jail").mkdir()
-        self.link("/proc/self/root", "/jail")
-        extra = r'''
-storage_readlink() {
-    case "$1" in */root) printf '/';; *) cat "$FX$1";; esac
-}
-'''
-        result = self.run_shell("storage_inventory", extra)
-        self.assertTrue(json.loads(result.stdout)["error"])
-
-    def test_namespace_change_during_coverage_refuses(self):
-        base = self.namespace(["1 0 0:22 / / rw - tmpfs tmpfs rw"])
-        extra = r'''
-storage_readlink() {
-    case "$1" in */4321/ns/mnt)
-        if [ -e "$FX/ns-read" ]; then printf 'mnt:[201]'; else
-            printf seen > "$FX/ns-read"; cat "$FX$1"
-        fi;;
-    *) cat "$FX$1";; esac
-}
-'''
-        result = self.run_shell("storage_inventory", extra)
-        self.assertTrue(json.loads(result.stdout)["error"], base)
-
-    def test_new_namespace_in_second_scan_is_not_silently_ignored(self):
-        extra = r'''
-storage_list_dir() {
-    if [ "$1" = /proc ]; then
-        if [ -e "$FX/proc-scanned" ]; then
-            printf '%s\n' 2 4321
-        else printf seen > "$FX/proc-scanned"; printf '2\n'; fi
-    else
-        [ -d "$FX$1" ] || return 1
-        for entry in "$FX$1"/*; do
-            [ -e "$entry" ] || [ -L "$entry" ] || continue
-            printf '%s\n' "${entry##*/}"
-        done
-    fi
-}
-'''
-        self.namespace(["1 0 8:0 / /private rw - ext4 /in-jail rw"])
-        result = self.run_shell("storage_inventory", extra)
-        self.assertTrue(json.loads(result.stdout)["error"])
-
-    def test_foreign_unknown_anonymous_backing_is_not_assumed_unrelated(self):
-        self.namespace(["1 0 0:30 / / rw - overlay overlay rw,lowerdir=/hidden"])
-        self.assert_global_error()
-
-    def test_foreign_flash_source_path_is_not_host_character_identity_proof(self):
-        # A jail may bind a different UBI character node at this spelling.
-        # Unlike a block mount, anonymous UBIFS has no physical rdev in field 3.
-        self.namespace(["1 0 0:80 / / rw - ubifs /dev/ubi0_1 rw"])
-        self.assert_global_error()
-
-    def test_foreign_proven_flash_superblock_keeps_external_storage_eligible(self):
-        self.namespace(["1 0 0:20 / / rw - ubifs ubi0:rootfs rw"])
-        self.assertTrue(self.device()["eligible"])
-
-    def test_unreadable_live_thread_namespace_refuses_but_dead_tasks_do_not(self):
-        base = self.namespace(["1 0 0:22 / / rw - tmpfs tmpfs rw"])
-        (self.root / (base + "/ns/mnt").lstrip("/")).unlink()
-        self.assert_global_error()
-        self.write(base + "/status", "Pid:\t4321\nState:\tZ (zombie)\nKthread:\t0\n")
-        self.assertTrue(self.device()["eligible"])
-
     def test_unmounted_configured_loop_marks_backing_disk_held(self):
         self.partition()
         self.disk("sdb", "8:16")
@@ -225,7 +97,7 @@ cat "$FX/ls-output"
 
 class FinalBoundaryTests(formatting.FormattingFixture):
     def test_all_new_prewrite_vetoes_protect_both_entrypoints(self):
-        for mutation in ("foreign-mount", "configured-loop", "quoted-alias"):
+        for mutation in ("configured-loop", "quoted-alias"):
             for entry in ("format-device.sh", "auto-setup.sh"):
                 with self.subTest(mutation=mutation, entry=entry):
                     try:
@@ -271,59 +143,30 @@ class FinalBoundaryTests(formatting.FormattingFixture):
                                                     ["mkfs.ext4", "-F", "/dev/sda2"]])
                 self.reset_final()
 
-    def test_unrelated_foreign_namespace_does_not_block_either_entrypoint(self):
-        base = "/proc/4321/task/4321"
-        self.write(base + "/ns/mnt", "mnt:[200]")
-        self.link(base + "/root", "/")
-        self.write(base + "/mountinfo", "1 0 8:16 / /private rw - ext4 /jail-only-device rw\n")
-        for entry in ("format-device.sh", "auto-setup.sh"):
-            with self.subTest(entry=entry):
-                result = self.invoke(entry)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.writers()[:3], [["fdisk", "/dev/sda"], ["mkswap", "/dev/sda1"],
-                                                    ["mkfs.ext4", "-F", "/dev/sda2"]])
-                self.reset_mutation()
-                self.write("/config/fstab", "# unrelated\n")
-                (self.root / "calls").unlink()
-
     def reset_final(self):
         self.reset_mutation()
         self.write("/config/fstab", "# unrelated\n")
-        for path in ("proc/4321/task/4321/mountinfo", "proc/4321/task/4321/ns/mnt",
-                     "proc/4321/task/4321/root", "sys/class/block/loop0",
+        for path in ("sys/class/block/loop0",
                      "sys/dev/block/7:0", "owner'volume"):
             (self.root / path).unlink(missing_ok=True)
-        # Remove only fixture directories created by the foreign-mount double.
-        for path in ("proc/4321/task/4321/ns", "proc/4321/task/4321", "proc/4321/task", "proc/4321"):
-            directory = self.root / path
-            if directory.exists():
-                directory.rmdir()
         (self.root / "calls").unlink(missing_ok=True)
 
-    def test_new_namespace_or_loop_before_later_writers_stops_next_writer(self):
-        for mutation in ("foreign-mount", "configured-loop"):
-            for stage, expected in (("sleep", ["fdisk"]), ("mkswap", ["fdisk", "mkswap"])):
-                for entry in ("format-device.sh", "auto-setup.sh"):
-                    with self.subTest(mutation=mutation, stage=stage, entry=entry):
-                        try:
-                            self.write(f"/{stage}-mutation", mutation)
-                            self.assert_failed(self.invoke(entry))
-                            self.assertEqual([call[0] for call in self.writers()], expected)
-                        finally:
-                            self.reset_final()
+    def test_new_loop_before_later_writers_stops_next_writer(self):
+        for stage, expected in (("sleep", ["fdisk"]), ("mkswap", ["fdisk", "mkswap"])):
+            for entry in ("format-device.sh", "auto-setup.sh"):
+                with self.subTest(stage=stage, entry=entry):
+                    try:
+                        self.write(f"/{stage}-mutation", "configured-loop")
+                        self.assert_failed(self.invoke(entry))
+                        self.assertEqual([call[0] for call in self.writers()], expected)
+                    finally:
+                        self.reset_final()
 
-    def test_fresh_namespace_and_loop_coverage_before_activation(self):
-        for mutation in ("foreign-mount", "configured-loop"):
-            with self.subTest(mutation=mutation):
-                try:
-                    self.write("/mv-mutation", mutation)
-                    result = self.invoke("post-format.sh", ("sda", IDENTITY, "/dev/sda", "/dev/sda1", "/dev/sda2"))
-                    self.assert_failed(result)
-                    self.assertEqual(self.writers(), [])
-                finally:
-                    self.reset_final()
-                    (self.root / "mv-mutation").unlink()
-                    self.write("/config/fstab", "# unrelated\n")
+    def test_fresh_loop_coverage_before_activation(self):
+        self.write("/mv-mutation", "configured-loop")
+        result = self.invoke("post-format.sh", ("sda", IDENTITY, "/dev/sda", "/dev/sda1", "/dev/sda2"))
+        self.assert_failed(result)
+        self.assertEqual(self.writers(), [])
 
     def test_busybox_missing_or_nonuuid_writer_refuses_before_fdisk(self):
         for mode in ("busybox", "missing", "no-uuid", "no-libuuid"):

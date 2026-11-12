@@ -34,13 +34,6 @@ class StorageFixture(unittest.TestCase):
         self.write("/proc/sys/kernel/random/boot_id", BOOT)
         self.write("/proc/cmdline", "console=ttyS0 root=ubi0:rootfs")
         self.write("/proc/swaps", "Filename\tType\tSize\tUsed\tPriority\n")
-        self.write("/proc/self/ns/mnt", "mnt:[100]")
-        self.link("/proc/self/root", "/")
-        self.link("/proc/1/root", "/")
-        self.link("/proc/1/task/1/root", "/")
-        self.write("/proc/1/task/1/ns/mnt", "mnt:[100]")
-        self.write("/proc/2/status", "Name:\tkthreadd\nPid:\t2\nKthread:\t1\n")
-        self.write("/proc/2/task/2/status", "Name:\tkthreadd\nPid:\t2\nKthread:\t1\n")
         self.write("/proc/mtd", 'dev: size erasesize name\nmtd4: 01000000 00020000 "ubi"\n')
         self.mtd_path = "/sys/devices/platform/spi0/spi0.0/mtd/mtd4"
         self.write(f"{self.mtd_path}/type", "nand")
@@ -82,10 +75,9 @@ printf '%srw------- 1 0 0 %s, %s Nov 12 00:00 %s\\n' "$kind" "${pair%:*}" "${pai
                         PATH=f"{self.root / 'commands'}:/usr/bin:/bin")
         # Only narrow I/O readers change. Policy and JSON serialization remain real.
         self.readers = r'''
-storage_read_file() { cat "$FX$1"; }
-storage_readlink() { cat "$FX$1"; }
-storage_same_file() { [ "$FX$1" -ef "$FX$2" ]; }
+storage_read_file() { printf '%s\n' "$1" >> "$FX/reads"; cat "$FX$1"; }
 storage_list_dir() {
+    printf '%s\n' "$1" >> "$FX/reads"
     [ -d "$FX$1" ] || return 1
     for entry in "$FX$1"/*; do
         [ -e "$entry" ] || [ -L "$entry" ] || continue
@@ -93,6 +85,7 @@ storage_list_dir() {
     done
 }
 storage_realpath() {
+    printf '%s\n' "$1" >> "$FX/reads"
     result=$(readlink -f "$FX$1") || return 1
     case "$result" in "$FX"/*) printf '%s\n' "${result#"$FX"}";; *) return 1;; esac
 }
@@ -195,10 +188,7 @@ storage_partition_value() {
             if len(fields) >= 5 and fields[4].startswith("/"):
                 point = fields[4].replace("\\040", " ").replace("\\134", "\\")
                 (self.root / point.lstrip("/")).mkdir(parents=True, exist_ok=True)
-        rows = list(self.mounts)
-        if not any(len(row.split()) >= 5 and row.split()[4] == "/proc" for row in rows):
-            rows.append("99 1 0:99 / /proc rw - proc proc rw")
-        self.write("/proc/self/mountinfo", "\n".join(rows) + "\n")
+        self.write("/proc/self/mountinfo", "\n".join(self.mounts) + "\n")
 
     def run_shell(self, body, extra=""):
         readers = self.readers
@@ -253,6 +243,25 @@ storage_partition_value() {
 
 
 class StorageTests(StorageFixture):
+    def test_host_inventory_needs_no_process_or_namespace_evidence(self):
+        self.disk("mmcblk0", "179:0", "mmc", "0")
+        self.disk("mmcblk1", "179:8", "sd")
+        self.partition("mmcblk0", "mmcblk0p2", "179:2", number=2)
+        self.mounts = ["1 0 179:2 / / rw - ext4 /dev/root rw"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", "root=/dev/mmcblk0p2")
+        inventory = self.inventory()
+        proc_reads = {path for path in (self.root / "reads").read_text().splitlines()
+                      if path == "/proc" or path.startswith("/proc/")}
+        self.assertEqual(proc_reads, {"/proc/self/mountinfo", "/proc/swaps", "/proc/cmdline",
+                                      "/proc/sys/kernel/random/boot_id"})
+        self.assertIsNone(inventory["error"], inventory)
+        devices = {device["id"]: device for device in inventory["devices"]}
+        self.assertTrue(devices["sda"]["eligible"])
+        self.assertTrue(devices["mmcblk1"]["eligible"])
+        self.assertFalse(devices["mmcblk0"]["eligible"])
+        self.assertIn("System", devices["mmcblk0"]["reason"])
+
     def test_emmc_system_blocks_only_emmc_and_keeps_usb_eligible(self):
         self.disk("mmcblk0", "179:0", "mmc", "0")
         self.disk("mmcblk1", "179:8", "sd")

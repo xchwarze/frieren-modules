@@ -1,6 +1,6 @@
 # Safe External Storage Setup Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Tasks 1–4 are implemented. Execute only Task 5 in the existing feature checkout; do not restart earlier tasks.
 
 **Goal:** Replace implicit first-device formatting with explicit, confirmed, guarded USB/SD setup and open a PR resolving issue #4.
 
@@ -9,6 +9,24 @@
 **Tech Stack:** OpenWrt/BusyBox POSIX sh, PHP 8.2–8.4, React 18, React Bootstrap, Jotai, existing authenticated query/mutation hooks, Python standard-library shell-fixture tests, PHP CLI tests, and Vitest component tests.
 
 **Spec:** `docs/superpowers/specs/2026-11-12-usbstorage-safe-setup-design.md`
+
+## Current execution: user-directed OpenWrt simplification
+
+The latest user request supersedes the earlier namespace-extension work: generic, simple OpenWrt host storage setup, without container/chroot coverage or model-specific handling. Earlier tasks are already implemented; do not restart them.
+
+### Task 5: Remove namespace overengineering and deliver the existing feature
+
+**Files:** `usbstorage/public/bin/storage-common.sh`, `storage-format.sh`, focused shell tests, README, and this design/plan's scope notes. PHP/UI contracts and other modules stay unchanged.
+
+**Interfaces:** Preserve `storage_inventory`, `storage_validate_target DEVICE_ID IDENTITY CONFIRMATION`, `storage_mount_snapshot` and `ST_MOUNTS`, selected partition state, JSON shape, and the explicit three-argument scripts.
+
+- [x] Add host-only behavioral coverage showing ordinary OpenWrt storage works without PID 2, process/thread traversal, namespace-root checks, or foreign-process mountinfo. Retain stale identity, eMMC/system, mount/swap/holders, lock, writer failures, and targeted-fstab tests.
+- [x] Run that coverage before changing production code and record the expected failure of the overcomplicated implementation.
+- [x] Replace namespace coverage with one validated current-host mountinfo read. Remove the process/thread/foreign-mount inspection code, its root-proof helpers, obsolete fixture machinery, and obsolete namespace-guarantee tests. Update activation to use the same simple fresh host snapshot.
+- [x] Preserve working stock OpenWrt capabilities, USB/SD policy, UUID-capable swap writer, lock, selected partitions/configuration, and the 2 TiB DOS bound. Do not add another compatibility framework or virtual-storage feature.
+- [x] Update README/spec/plan claims: host-only visibility, no protection claim for hidden container/chroot mounts, no complete-namespace guarantee. Old I1 is removed from scope, not falsely fixed.
+- [x] Run the remaining complete shell suite, PHP/UI suites, syntax/bin ShellCheck, schema/YAML/version checks, and qualified headless build. Commit with DSR identity and no attribution.
+- [ ] Obtain one scope-bounded review of the simplification and preservation of the core OpenWrt safety checks. Controller then pushes only the feature branch, opens the PR for #4, and checks hosted CI. No merge or release.
 
 ## Global Constraints
 
@@ -45,61 +63,12 @@ Selection request: `{deviceId, identity, confirmation}`. `deviceId` is an enumer
 
 Identity snapshot: boot ID, whole-disk major/minor, kernel disk sequence, and sector count. Use a strict, shell-safe representation. Require all fields and compare the fresh snapshot before destructive steps; client possession of an identity is never authorization to bypass eligibility.
 
-### Task 1: Read-only inventory and shared safety policy
+## Completed implementation (Tasks 1–4)
 
-**Files:** Create `public/bin/storage-common.sh`, `public/bin/storage-devices.sh`, and `tests-shell/test_storage.py` under `usbstorage/`.
-
-**Interfaces:** Produce `storage_inventory` (JSON stdout) and `storage_validate_target DEVICE_ID IDENTITY CONFIRMATION` (exit 0 only for a fresh eligible target; set validated canonical target variables). Read sysfs/proc through narrow shell helper functions that tests can replace after sourcing; installed entry points always use real paths and checks.
-
-- [ ] Write fixture tests asserting: eMMC is blocked while USB is eligible; removable SD is eligible; internal/fixed USB is blocked; USB SSD `removable=0` with unknown connection is eligible with a warning; root and usage protections override transport eligibility.
-- [ ] Add tests for PARTLABEL literal matching/duplicates, PARTUUID, `/dev/root` and symlink aliases, overlay/extroot/loop/mapper backing storage, known MTD/UBI roots, and unresolved backing storage. Assert the exact protected physical disk or a global blocking error.
-- [ ] Add identity-reuse, active swap, mounted whole disks/partitions, holders, read-only, malformed metadata, and too-small-device cases. Assert changed identity and incomplete evidence are rejected.
-- [ ] Run `python3 -m unittest discover -s usbstorage/tests-shell -p 'test_*.py' -v`; confirm failures are caused by missing implementation.
-- [ ] Implement inventory and validation with canonical sysfs identities and mountinfo major/minor mapping. Final-review extension: supplement `/proc/self/mountinfo` with full-root process/thread namespace representatives and a coverage rescan; refuse missing coverage rather than assuming namespace-local mounts are complete. Reverse-resolve configured loops independently of mount/swap traversal. Use existing read-only OpenWrt tools where needed for partition metadata; no eval of device metadata. JSON-escape all display strings. Refuse ambiguity rather than claiming unsupported layouts are safe.
-- [ ] Run the complete shell suite, `sh -n` on the new scripts, and ShellCheck. Confirm inventory never invokes write/unmount/swap commands using refusing command doubles.
-- [ ] Commit the independently testable discovery layer without coauthor trailers.
-
-### Task 2: Guarded formatting and selected-partition configuration
-
-**Files:** Create `usbstorage/public/bin/storage-format.sh` and `usbstorage/tests-shell/test_formatting.py`; modify `auto-setup.sh`, `format-device.sh`, `post-format.sh`. Reuse the existing storage fixtures without duplicating their policy logic; a focused shared-fixture extraction from `tests-shell/test_storage.py` is allowed if needed.
-
-**Interfaces:** Consume Task 1 validation. Both public entry points require all three selection arguments. Produce actual selected swap/data partition paths for post-format configuration. One atomic setup lock covers formatting and post-format work; direct formatting shares the same exclusion.
-
-- [ ] Write failing tests proving both entry points reject missing/forged/stale/unsafe selections without invoking destructive stubs. Prove a device becoming mounted, swapped, held, replaced, or unavailable immediately before a write aborts without selecting a different disk.
-- [ ] Add tests for overlapping operations, lock cleanup on failure, and insufficient capacity. Use fixtures and refusing command doubles only.
-- [ ] Add targeted-fstab tests: configure only the selected UUIDs, preserve unrelated entries byte-for-byte where feasible, and reject an existing `/sd` owner before any partition-table write. Do not accept `block detect | uci import fstab` or positional mount/swap selection.
-- [ ] Run the suite and confirm these tests fail for the existing unsafe behavior.
-- [ ] Implement shared guarded formatting functions. Validate before each destructive stage, including after waits. Remove force-unmount/swapoff behavior, retain real failure propagation, and avoid success logs on failure. Serialize the complete setup transaction; do not expose a lock-bypass switch.
-- [ ] Final-review extension: preflight the UUID-capable `/usr/sbin/mkswap` supplied by declared formatter dependency `swap-utils` before fdisk. Use stock numeric `ls -dnL` for rdev, refuse unsupported UCI encodings, use storage-attachment USB location, and reject media above 2 TiB for retained DOS partitioning (including otherwise-valid larger 4Kn media). Reapply namespace/loop ownership coverage during selected activation. Add actual boundary regressions without real device operations.
-- [ ] Update the orchestrator to format only the supplied target and configure its actual partitions. Targeted configuration uses selected UUIDs and preserves unrelated fstab settings; clear configuration errors remain visible.
-- [ ] Run all shell tests, syntax checks, and ShellCheck on every module shell script. Commit the guarded execution layer.
-
-### Task 3: Authenticated inventory and explicit setup API
-
-**Files:** Create `usbstorage/public/StorageDeviceHelper.php` and `usbstorage/tests-php/storage_test.php`; modify `public/UsbstorageController.php`.
-
-**Interfaces:** `StorageDeviceHelper::getInventory($modulePath)` returns the inventory contract; `StorageDeviceHelper::prepareSetup($modulePath, array $request)` returns an escaped command or throws a descriptive validation exception. Add authenticated action `getStorageDevices`; `startAutoSetup` consumes the selection contract and preserves the existing background task name/status route.
-
-- [ ] Write PHP tests for valid inventory, malformed/error output, unknown IDs, blocked devices, stale identity, mismatched confirmation, injection strings, wrong value types, and legacy requests without a destination. Assert no background operation is started for rejected requests.
-- [ ] Run `php usbstorage/tests-php/storage_test.php`; confirm expected failures before implementation.
-- [ ] Implement inventory execution through the existing OpenWrtHelper and decode/validate its shape. Re-enumerate before preparing a command; only discovered canonical identifiers and strict identity/confirmation values enter the background command. Never pass model strings or raw client paths to a shell.
-- [ ] Wire controller actions to the helper, retain concurrency/progress behavior, and surface validation errors through existing response methods. Review nested shell quoting in BackgroundTaskHelper; constrain arguments rather than changing the global helper.
-- [ ] Run the complete PHP and shell suites and PHP syntax checks. Commit the API layer.
-
-### Task 4: Explicit selection UI, documentation, and PR verification
-
-**Files:** Modify `usbstorage/src/feature/components/SetupCard/index.jsx`, `hooks/useStartAutoSetup.js`, `hooks/useGetAutoSetupStatus.js`, and `helpers/queryKeys.js`; create `hooks/useGetStorageDevices.js`, `components/SetupCard/StorageDeviceList.jsx`, `components/SetupCard/FormatConfirmationModal.jsx`, `tests-js/SetupCard.test.jsx`, `vitest.config.js`, and test setup as needed. Update `README.md`, `package.json`, `public/manifest.json`, `yarn.lock`, and create `.github/workflows/usbstorage-tests.yml`.
-
-**Interfaces:** The inventory hook calls `getStorageDevices`; the start mutation sends exactly `{module: 'usbstorage', action: 'startAutoSetup', deviceId, identity, confirmation}`. The UI consumes the stable inventory contract from Task 1 and never supplies a fallback selection.
-
-- [ ] Add the smallest test dependencies needed for React 18/Vitest/Testing Library; use the shared framework source through `VITE_COMMON_ALIAS`, deduplicating React so component tests do not load two React instances. Preserve existing peer dependency contracts.
-- [ ] Write failing UI tests: multiple devices/no preselection, one device/no preselection, protected MMC rows and reasons, unknown USB warning, loading/empty/error states, required exact-path confirmation, correct request payload, pending/running duplicate protection, and stale/changed inventory invalidating selection and confirmation.
-- [ ] Run the focused UI suite and confirm failures are due to the missing selection/confirmation workflow.
-- [ ] Implement the list and confirmation flow using existing component patterns. The dangerous submit button remains disabled until the exact confirmation matches. Handle backend rejections clearly and refresh inventory after a completed operation; preserve progress logs.
-- [ ] Update manual commands and safety documentation, including unknown USB location, missing kernel capabilities, no force override, and no physical-device verification claim. Set package and manifest to the same next version (`1.0.6`).
-- [ ] Add focused CI with Ubuntu 24.04, PHP 8.2–8.4 syntax/tests, shell fixtures/static checks, and Node 22 UI tests/build. Check out the framework as a sibling only where required for existing shared-source aliases; do not build or publish release tarballs.
-- [ ] Run the full shell, PHP, and UI suites; build the module with `VITE_COMMON_ALIAS=../../frieren/frieren-front/src corepack yarn build`; validate manifest/schema and YAML. Review the entire branch against the spec and address safety findings before opening the PR.
-- [ ] Commit, push only the feature branch, and open a PR to master referencing issue #4. Include verification commands, outcomes, and the outstanding physical OpenWrt checks. Do not merge it or add coauthor trailers.
+- Task 1: Shared read-only sysfs/proc inventory, canonical identities, system backing resolution, USB/SD classification, and host mount/swap/holder/read-only refusals. Configured-loop ownership remains checked; hidden namespace/chroot mounts are outside scope, not technically fixed.
+- Task 2: Both explicit-selection entry points share one lock and recheck identity/usage before writers. Verify selected partition topology, preflight the UUID-capable `swap-utils` writer, retain the 2 TiB DOS bound and stock numeric `ls`, preserve unrelated fstab, and activate only selected partitions using fresh host mount/loop evidence.
+- Task 3: Authenticated inventory and strict setup selection/confirmation validation. PHP re-enumerates before launch; public JSON, API, progress behavior, and three-argument script contracts stay unchanged.
+- Task 4: No-default device selection UI, exact-path confirmation, stale/pending/error handling, module-local fixture/PHP/UI tests, qualified headless build, and focused CI. Package/manifest versions remain `1.0.6`; physical OpenWrt and 32-bit verification remain outstanding.
 
 ## Plan Self-Review
 
