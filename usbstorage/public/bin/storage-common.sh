@@ -33,9 +33,8 @@ storage_partition_value() (
     # Full blkid supports partition tags. Unsupported BusyBox variants fail closed.
     # -p bypasses caches; no filesystem or partition-table writes are requested.
     case "$2" in PARTUUID) tag=PART_ENTRY_UUID;; PARTLABEL) tag=PART_ENTRY_NAME;; *) return 1;; esac
+    # A nonzero probe can mean inaccessible or unreadable metadata, not no match.
     blkid -p -s "$tag" -o value "$1"
-    status=$?
-    [ "$status" -eq 0 ] || [ "$status" -eq 2 ]
 )
 
 storage_name_valid() {

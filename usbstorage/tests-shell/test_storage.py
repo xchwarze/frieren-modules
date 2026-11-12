@@ -548,6 +548,16 @@ case "$3" in PART_ENTRY_UUID) printf 'abc-123';; PART_ENTRY_NAME) printf 'sys[1]
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "abc-123\nsys[1].*")
 
+    def test_nonzero_partition_probe_is_incomplete_evidence(self):
+        probe = self.root / "commands/blkid"
+        probe.write_text('''#!/bin/sh
+[ "$#" = 6 ] && [ "$6" = "$FX/dev/sda" ] || exit 96
+exit 2
+''')
+        result = self.run_shell('storage_partition_value "$FX/dev/sda" PARTUUID',
+                                f'. {shlex.quote(str(COMMON))}\n')
+        self.assertNotEqual(result.returncode, 0)
+
     def test_missing_proc_usage_evidence_blocks_globally(self):
         for path in ("proc/self/mountinfo", "proc/swaps", "proc/cmdline"):
             with self.subTest(path=path):
