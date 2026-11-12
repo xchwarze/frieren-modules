@@ -1,56 +1,93 @@
 # USB Storage Module
 
-A module for configuring SD card and USB storage on OpenWrt devices. USB Storage automates the detection and mounting of external storage devices through a bundled shell script and provides a manual editor for the OpenWrt fstab configuration, enabling persistent custom mount points.
+Configure explicitly selected external USB storage or removable SD cards on OpenWrt. Setup erases one whole device, creates **1 GiB swap plus an ext4 data partition mounted at `/sd`**, and preserves unrelated fstab entries. Internal eMMC is never supported, even when it does not contain the running system. There is no force override or automatic destination selection.
 
-## Features
+## Safe setup in the browser
 
-- **Auto-setup script** — runs a bundled `auto-setup.sh` in the background that detects a connected storage device, partitions it (a 1 GB swap partition + an ext4 data partition), formats it, and configures the mount point and swap in fstab. Runs as a tracked background task via the framework's `BackgroundTaskHelper`
-- **Real-time setup progress** — polls the task log every second and streams output to the browser until the task completes
-- **Fstab editor** — reads and displays the current `/etc/config/fstab` in an editable textarea; saving runs a guarded update — it snapshots the current fstab, writes the new content, restarts the `fstab` service, and rolls back to the snapshot if the write or restart fails
-- **Dependency management** — checks for and installs the full set of required packages via opkg with progress polling
+1. Open **Setup device**. Read-only discovery lists device paths, models, capacities, transports, connection information, existing partitions, mounts, swap, warnings, and blocking reasons. Protected disks remain visible but cannot be selected.
+2. Choose an eligible disk yourself. Nothing is preselected, including when only one disk is available. Existing partitions do not mean a device is empty.
+3. Choose **Review erase**. Check the exact disk, capacity, model, warnings, and proposed layout. Type its displayed canonical `/dev/...` path exactly, without extra spaces.
+4. Choose **Erase device** only if you intend to destroy **every partition and all data on that disk**. Formatting cannot be undone.
+5. Read the progress log. **Not running does not mean successful**: the status API provides liveness and logs, not an exit-code success field. Failures can leave a formatted disk or partial configuration/activation; there is no rollback guarantee.
 
-## Use Cases
+**Refresh** reloads inventory and task status and clears the selection and typed confirmation. Changed/missing identity, lost eligibility, or discovery failure also invalidates the selection. A rejected request displays the backend reason; the UI never chooses another destination or automatically retries an erase. Unknown/loading/error task status, inventory refresh, pending requests, and running tasks block submission. Existing running tasks are checked on page load and status polls every second. When a running task stops, inventory refreshes and logs remain visible.
 
-- **Expand device storage for captures** — mount a USB drive or SD card to provide persistent storage for large hcxdumptool pcapng files, tcpdump captures, or scan history that would otherwise fill the device's limited internal flash
-- **Persistent data across reboots** — configure a mount point in fstab so capture directories survive device restarts, preventing data loss between sessions
-- **Custom mount point configuration** — manually edit fstab to set specific mount paths (e.g., `/sd`, `/usb`) or mount options for connected devices
-- **Initial device provisioning** — run auto-setup during initial configuration to prepare a freshly inserted USB drive for use without needing terminal access
+USB ancestry must be positively identified. A USB SSD reporting non-removable media is not automatically internal. Positive fixed/internal connection information blocks setup. **An unknown USB physical connection location remains eligible only after all other checks, with a visible warning and explicit confirmation.** This is a usability tradeoff, not proof that the disk is physically external.
 
-## Requirements
+## Refusal conditions and capability limits
 
-| Requirement | Notes |
-|-------------|-------|
-| `block-mount` | OpenWrt block device mount utility |
-| `e2fsprogs` | ext2/3/4 filesystem utilities (`mkfs.ext4`) |
-| `kmod-fs-ext4` | Kernel module for ext4 filesystem support |
-| `kmod-usb-storage-extras` | Kernel module for USB mass storage devices |
-| `fdisk` | Partition table management |
+- System/boot/ROM/overlay/extroot backing disks, all MMC/eMMC, unknown transport, unstable disk identity, read-only devices, mounted filesystems, active swap, block holders, and conflicting `/sd` mounts/configuration are refused. Unrelated filesystems are never force-unmounted.
+- Discovery and formatting require reliable kernel disk-generation information and resolvable system backing storage. Missing evidence causes a clear refusal, not a compatibility bypass. A `mmcblk*` name alone does not identify external storage: only positively identified removable SD is supported.
+- Stock PARTLABEL roots use verified kernel partition metadata. PARTUUID roots require an **already-installed supported full `blkid` probe**; without it setup refuses. Installing the base module dependencies alone does not guarantee this capability.
+- Mounted Btrfs, emulated/unproven MTD, and aliased `/sd` paths are deliberately unsupported/refused. Known MTD/UBI-root systems and eMMC-root systems can still offer safe external USB/SD candidates when all evidence is available.
+- PHP re-enumerates the selected device before launch. The scripts validate the same identity/usage policy again at the destructive boundary and after waits. An atomic lock spans the entire operation. Userspace checks cannot make arbitrary hotplug or external mounting races atomic; avoid changing connections or mounting disks during setup.
+- SIGKILL or power loss can leave `/var/lock/usbstorage-setup.lock` stale. Inspect the running processes, device state, and logs before an operator clears it. Never remove a live operation's lock.
+- Additional hardware drivers may be required. NTFS, exFAT, and FAT32 setup are not supported.
+- The initial functional target is OpenWrt 24.x. Automated fixtures do **not** establish physical OpenWrt behavior. No physical-device or 32-bit verification has occurred.
 
-All packages are installed via the module's dependency management system (opkg).
+## Manual scripts
 
-## Architecture
+Use the installed module's `bin` directory (the source files live in `public/bin`). Discovery is read-only:
 
-```
-Frontend                          Backend (PHP)
-────────────────────              ──────────────────────────────
-SetupCard                         UsbstorageController
-  └─ Run auto setup ─────────────▶ startAutoSetup     → BackgroundTaskHelper::start
-                                                          ("usbstorage-autosetup", sh auto-setup.sh)
-  └─ Progress output ◀──────────── getAutoSetupStatus → BackgroundTaskHelper status
-                                      /tmp/task-usbstorage-autosetup.{log,flag} (1s poll)
-ConfigCard
-  └─ Fstab textarea ◀──────────── getFstabConfig      → ModuleOpenWrtHelper::getFstabConfig
-  └─ Save button ─────────────────▶ saveFstabConfig    → ModuleOpenWrtHelper::saveFstabConfig
-                                      (snapshot → write → restart → rollback on failure)
+```sh
+sh ./storage-devices.sh
 ```
 
-Liveness is tracked by the framework's `BackgroundTaskHelper`: the completion flag (`/tmp/task-usbstorage-autosetup.flag`) is set when the script exits, and the frontend polls `getAutoSetupStatus` every second until `isRunning` flips to false. A concurrency guard refuses a second run while one is in progress.
+Inspect the JSON's `error`, `eligible`, `reason`, and `warnings` first. Choose one whole disk and copy its exact `id` and fresh `identity` token. Do not select the first result or infer an ID from a `mmcblk*` name. After checking the model, size, path, partitions, and physical device, replace these placeholders yourself:
 
-## Important Notes
+```sh
+device_id='REPLACE_WITH_SELECTED_ID'
+identity='REPLACE_WITH_FRESH_IDENTITY'
+printf 'Type the selected canonical /dev/... path to erase ALL its data: '
+IFS= read -r confirmation
+sh ./auto-setup.sh "$device_id" "$identity" "$confirmation"
+```
 
-- The fstab editor does not validate UCI syntax, but it snapshots the current fstab before writing and rolls back if the service restart fails — a backup is also left at `/tmp/fstab.bak`. A config that is syntactically valid but semantically wrong can still misconfigure mounts on the next reboot
-- The auto-setup script only supports ext4 filesystems; NTFS, exFAT, and FAT32 are not supported
-- Auto-setup wipes the selected device — it picks the first present of `/dev/sdcard/sd`, `/dev/mmcblk0`, `/dev/sda` (external SD/USB on these gadgets) and formats it
+The three arguments are mandatory. Old no-argument calls refuse; a missing, changed, busy, or unsafe selection never falls back to another disk. Both `auto-setup.sh` (format and configure) and `format-device.sh` (format only) enforce the same policy and exact-path confirmation. Do not run both for one setup. Advanced `post-format.sh` usage requires five arguments: device ID, the same identity, exact confirmation, and the exact newly created swap and data partition paths. Never guess partition suffixes or use positional fstab entries. Failures return nonzero and must be inspected.
+
+## Requirements and other features
+
+The module's dependency manager installs `block-mount`, `e2fsprogs`, `kmod-fs-ext4`, `kmod-usb-storage-extras`, and `fdisk` via opkg. Kernel/system-topology capabilities described above are also required and are not supplied by that package list.
+
+The manual fstab editor remains available. It snapshots configuration before saving and rolls back on write or service-restart failure, leaving `/tmp/fstab.bak`. It does not validate UCI syntax or mount semantics; a saved configuration can still misconfigure mounts after reboot. Setup updates only the selected new swap/data entries and preserves unrelated mounts and swaps. The existing hotplug loader and storage-path setup remain in place where safe.
+
+## API and architecture
+
+Authenticated inventory request: `{module: 'usbstorage', action: 'getStorageDevices'}`. Response: `{devices, error}`. Each device includes a canonical ID/path, model, capacity, transport/connection, identity snapshot, eligibility/reason, warnings, partitions, mounts, and swaps. A global error disables all candidates.
+
+Setup sends exactly `{module: 'usbstorage', action: 'startAutoSetup', deviceId, identity, confirmation}`. `deviceId` is the selected canonical basename; `identity` is the exact discovery token; `confirmation` is the exact displayed path, not trimmed or normalized. Missing/extra/malformed fields, legacy requests, stale devices, and unsafe selections are rejected before background launch.
+
+`BackgroundTaskHelper` tracks `usbstorage-autosetup`; `getAutoSetupStatus` returns `{logContent, isRunning}` using `/tmp/task-usbstorage-autosetup.{log,flag}`. A completion flag records that the command exited, not whether it succeeded. The server and scripts enforce authoritative validation and operation locking independently of the UI.
+
+## Focused verification (no hardware)
+
+From the repository root:
+
+```sh
+python3 -m unittest discover -s usbstorage/tests-shell -p 'test_*.py' -v
+php -n usbstorage/tests-php/storage_test.php
+for script in usbstorage/public/bin/*.sh usbstorage/public/files/20-sd-loader; do
+    sh -n "$script" || exit 1
+done
+shellcheck -x -P usbstorage/public/bin usbstorage/public/bin/*.sh
+```
+
+Allow at least five minutes for the shell suite. Fixtures use synthetic sysfs/proc data and refusing/execution-boundary doubles. They do not create block nodes, attach loop devices, mount filesystems, or run real drive commands. The unchanged hotplug loader `public/files/20-sd-loader` has **14 pre-existing ShellCheck diagnostics**; syntax covers it, while focused static analysis covers all six `public/bin/*.sh` files. No baseline diagnostics were silently fixed or suppressed.
+
+From `usbstorage`, with the framework checked out at the sibling layout `modules/usbstorage` and `frieren/frieren-front`:
+
+```sh
+corepack yarn install --immutable
+VITE_COMMON_ALIAS=../../frieren/frieren-front/src corepack yarn test
+VITE_ANALYZER_ENABLE=false VITE_COMMON_ALIAS=../../frieren/frieren-front/src corepack yarn build
+corepack yarn validate
+```
+
+Use a current Node 22 patch release (test DOM dependencies require **22.22.2+**) or supported Node 24. Tests run actual React 18/Bootstrap components, Jotai state, authenticated query/mutation hooks, and request serialization, doubling only HTTP. Test resolution deduplicates React and shared providers against the module's dependencies; no framework changes are needed. Production peer contracts remain unchanged.
+
+The existing production config enables an interactive bundle analyzer that opens a browser and starts a local server. Disable it with `VITE_ANALYZER_ENABLE=false` for headless builds; this does not change the production bundle's functionality. CI uses this override without changing the shared build config.
+
+`.github/workflows/usbstorage-tests.yml` runs Ubuntu 24.04 shell fixtures/static checks, PHP 8.2–8.4 syntax/tests, and Node 22 UI tests/build/schema validation. Only the UI job checks out pinned framework source for the shared aliases. CI does not build release tarballs, publish, or touch physical storage.
 
 ## License
 

@@ -13,7 +13,7 @@ import isRunningSetupAtom from '@module/feature/atoms/isRunningSetupAtom.js';
 import { USB_STORAGE_GET_AUTO_SETUP_STATUS } from '@module/feature/helpers/queryKeys.js';
 
 const useGetAutoSetupStatus = () => {
-    const [isRunning, setIsRunning] = useAtom(isRunningSetupAtom);
+    const [, setIsRunning] = useAtom(isRunningSetupAtom);
 
     const query = useAuthenticatedQuery({
         queryKey: [USB_STORAGE_GET_AUTO_SETUP_STATUS],
@@ -21,18 +21,20 @@ const useGetAutoSetupStatus = () => {
             module: 'usbstorage',
             action: 'getAutoSetupStatus',
         }),
-        enabled: isRunning,
         staleTime: 0,
+        refetchOnMount: 'always',
         refetchInterval: 1000,
+        retry: false,
+        showGenericToast: false,
     });
 
     useEffect(() => {
-        if (query.isSuccess && query.data.isRunning === false) {
+        if (query.isSuccess && typeof query.data?.isRunning === 'boolean') {
             setIsRunning(query.data.isRunning);
         }
     }, [query.data, query.isSuccess, query.dataUpdatedAt, setIsRunning]);
 
-    return query
+    return query;
 };
 
 export default useGetAutoSetupStatus;
