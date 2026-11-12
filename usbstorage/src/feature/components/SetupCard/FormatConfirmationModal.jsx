@@ -12,12 +12,13 @@ import { formatSize } from './StorageDeviceList.jsx';
 
 const FormatConfirmationModal = ({ device, confirmation, onChange, onHide, onConfirm, disabled, pending }) => {
     const inputId = useId();
+    const titleId = `${inputId}-title`;
 
     return (
-        <Modal show onHide={pending ? undefined : onHide} backdrop={pending ? 'static' : true} keyboard={!pending} centered>
+        <Modal show aria-labelledby={titleId} onHide={pending ? undefined : onHide} backdrop={pending ? 'static' : true} keyboard={!pending} centered>
             <Form onSubmit={(event) => { event.preventDefault(); onConfirm(); }}>
                 <Modal.Header closeButton={!pending}>
-                    <Modal.Title>Erase {device.path}</Modal.Title>
+                    <Modal.Title id={titleId}>Erase {device.path}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     <p>{device.model || 'Unknown model'} — {formatSize(device.sizeBytes)} — {device.path}</p>

@@ -159,6 +159,18 @@ describe('selected-device setup', () => {
         expect(screen.getByRole('button', { name: 'Review erase' }).disabled).toBe(true);
     });
 
+    it.each(['/dev/sda', '/dev/sdb'])('names the erase dialog for the selected device %s', async (path) => {
+        inventory = () => ({ error: null, devices: [disk(), disk({ id: 'sdb', path: '/dev/sdb',
+            identity: 'v1:boot:8:16:44:16777216', partitions: [],
+        })] });
+        mount();
+        await ready();
+        await user.click(screen.getByRole('radio', { name: `Select ${path}` }));
+        await user.click(screen.getByRole('button', { name: 'Review erase' }));
+        expect(await screen.findByRole('dialog', { name: `Erase ${path}` })).toBeTruthy();
+        expect(starts()).toEqual([]);
+    });
+
     it('requires exact untrimmed path and sends only the selected identity and confirmation', async () => {
         mount();
         const modal = await review();
