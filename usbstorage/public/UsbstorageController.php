@@ -23,11 +23,21 @@ class UsbstorageController extends \frieren\core\Controller
         'getDependencyInstallationStatus' => true,
 
         // other apis
+        'getStorageDevices' => true,
         'startAutoSetup' => true,
         'getAutoSetupStatus' => true,
         'getFstabConfig' => true,
         'saveFstabConfig' => true,
     ];
+
+    public function getStorageDevices()
+    {
+        try {
+            return self::setSuccess(StorageDeviceHelper::getInventory(self::getModulePath()));
+        } catch (\RuntimeException $error) {
+            return self::setError($error->getMessage());
+        }
+    }
 
     public function startAutoSetup()
     {
@@ -35,15 +45,17 @@ class UsbstorageController extends \frieren\core\Controller
             return self::setError('Auto-setup is already running.');
         }
 
-        $scriptPath = self::getModulePath() . '/bin/auto-setup.sh';
-        if (!file_exists($scriptPath)) {
-            return self::setError('Auto-setup script not found.');
+        try {
+            $selection = array_diff_key($this->request, ['module' => true, 'action' => true]);
+            $command = StorageDeviceHelper::prepareSetup(self::getModulePath(), $selection);
+        } catch (\InvalidArgumentException | \RuntimeException $error) {
+            return self::setError($error->getMessage());
         }
 
         // Run via `sh <script>` (not the bare path) so the launch does not depend on
         // the script's +x bit, which a module install/extraction can strip.
         $this->logger('usbstorage auto-setup started', 'info');
-        BackgroundTaskHelper::start(self::TASK_AUTOSETUP, 'sh ' . escapeshellarg($scriptPath));
+        BackgroundTaskHelper::start(self::TASK_AUTOSETUP, $command);
 
         return self::setSuccess();
     }
