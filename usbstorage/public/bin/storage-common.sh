@@ -38,11 +38,46 @@ storage_read_fstab() {
     uci -q show fstab
 }
 storage_partition_value() (
-    # Full blkid supports partition tags. Unsupported BusyBox variants fail closed.
-    # -p bypasses caches; no filesystem or partition-table writes are requested.
-    case "$2" in PARTUUID) tag=PART_ENTRY_UUID;; PARTLABEL) tag=PART_ENTRY_NAME;; *) return 1;; esac
-    # A nonzero probe can mean inaccessible or unreadable metadata, not no match.
-    blkid -p -s "$tag" -o value "$1"
+    [ "$#" -eq 2 ] || return 1
+    node=$(storage_node_path "$1") || return 1
+    parent=$(storage_parent "$node") || return 1
+    partn=$(storage_read_file "/sys/class/block/$node/partition") || return 1
+    seq=$(storage_read_file "/sys/class/block/$parent/diskseq") || return 1
+    mm=$(storage_read_file "/sys/class/block/$node/dev") || return 1
+    storage_uint "$partn" && [ "$partn" -gt 0 ] &&
+        storage_uint "$seq" && [ "$seq" -gt 0 ] && storage_mm_valid "$mm" || return 1
+    case "$2" in
+        PARTLABEL)
+            # The kernel's PARTNAME is also the name used for root=PARTLABEL.
+            # Absence is valid only in a complete, identity-matching uevent.
+            metadata=$(storage_read_file "/sys/class/block/$node/uevent") || return 1
+            value=$(printf '%s\n' "$metadata" | LC_ALL=C awk -v node="$node" -v mm="$mm" -v partn="$partn" -v seq="$seq" '
+                $0 !~ /^[A-Z][A-Z0-9_]*=/ || $0 ~ /[[:cntrl:]]/ {bad=1;next}
+                {separator=index($0,"=");key=substr($0,1,separator-1)
+                 if(seen[key]++)bad=1;field[key]=substr($0,separator+1)}
+                END {
+                    if(bad || (field["MAJOR"] ":" field["MINOR"])!=mm || field["DEVNAME"]!=node ||
+                       field["DEVTYPE"]!="partition" || field["PARTN"]!=partn || field["DISKSEQ"]!=seq ||
+                       (seen["PARTNAME"] && field["PARTNAME"]==""))exit 1
+                    printf "%s",field["PARTNAME"]
+                }') || return 1;;
+        PARTUUID)
+            # Optional full blkid only: BusyBox output is not partition UUID proof.
+            # -p bypasses caches; no filesystem or partition-table writes are requested.
+            # A nonzero probe can mean inaccessible or unreadable metadata, not no match.
+            value=$(blkid -p -s PART_ENTRY_UUID -o value "$1") || return 1
+            printf '%s\n' "$value" | LC_ALL=C awk '
+                /^[0-9a-fA-F-]+$/ {
+                    n=split($0,a,"-")
+                    if((n==5 && length(a[1])==8 && length(a[2])==4 && length(a[3])==4 && length(a[4])==4 && length(a[5])==12) ||
+                       (n==2 && length(a[1])==8 && length(a[2])==2))ok=1
+                } END {exit !(ok && NR==1)}' || return 1;;
+        *) return 1;;
+    esac
+    [ "$(storage_node_path "$1")" = "$node" ] &&
+        [ "$(storage_read_file "/sys/class/block/$node/partition")" = "$partn" ] &&
+        [ "$(storage_read_file "/sys/class/block/$parent/diskseq")" = "$seq" ] || return 1
+    printf '%s\n' "$value"
 )
 
 storage_name_valid() {

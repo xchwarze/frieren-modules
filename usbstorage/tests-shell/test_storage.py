@@ -15,6 +15,8 @@ CLI = MODULE / "public/bin/storage-devices.sh"
 BOOT = "12345678-1234-1234-1234-123456789abc"
 SECTORS = 16777216
 IDENTITY = f"v1:{BOOT}:8:0:12:{SECTORS}"
+ROOT_PARTUUID = "11111111-2222-3333-4444-555555555555"
+DATA_PARTUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
 class StorageTests(unittest.TestCase):
@@ -25,6 +27,7 @@ class StorageTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.paths = {}
+        self.real_partition_reader = False
         for directory in ("sys/class/block", "sys/dev/block", "sys/bus/usb",
                           "dev", "metadata", "commands"):
             (self.root / directory).mkdir(parents=True)
@@ -78,6 +81,8 @@ storage_is_block() (
 storage_block_mm() { cat "$FX/rdev/${1##*/}"; }
 storage_char_mm() { cat "$FX/chrdev/${1##*/}"; }
 storage_read_fstab() { cat "$FX/etc/config/fstab"; }
+'''
+        self.mock_partition_reader = r'''
 storage_partition_value() {
     [ ! -e "$FX/metadata/fail" ] || return 1
     [ -f "$FX/metadata/${1##*/}.$2" ] || return 0
@@ -133,16 +138,22 @@ storage_partition_value() {
         self.disk("mtdblock4", "31:4", "unknown", "0",
                   sysfs_path=f"{self.mtd_path}/mtdblock4")
 
-    def partition(self, disk="sda", name="sda1", mm="8:1", label=None, uuid=None):
+    def partition(self, disk="sda", name="sda1", mm="8:1", label=None, uuid=None, number=1):
         path = f"{self.paths[disk]}/{name}"
         self.paths[name] = path
-        for attribute, value in {"dev": mm, "size": "4194304", "partition": "1", "ro": "0"}.items():
+        for attribute, value in {"dev": mm, "size": "4194304", "partition": str(number), "ro": "0"}.items():
             self.write(f"{path}/{attribute}", value)
         (self.root / path.lstrip("/") / "holders").mkdir()
         self.link(f"/sys/class/block/{name}", path)
         self.link(f"/sys/dev/block/{mm}", path)
         self.write(f"/dev/{name}", "fixture partition marker")
         self.write(f"/rdev/{name}", mm)
+        major, minor = mm.split(":")
+        uevent = (f"MAJOR={major}\nMINOR={minor}\nDEVNAME={name}\nDEVTYPE=partition\n"
+                  f"DISKSEQ=12\nPARTN={number}\n")
+        if label is not None:
+            uevent += f"PARTNAME={label}\n"
+        self.attr(name, "uevent", uevent)
         for key, value in (("PARTLABEL", label), ("PARTUUID", uuid)):
             if value is not None:
                 self.write(f"/metadata/{name}.{key}", value)
@@ -159,8 +170,11 @@ storage_partition_value() {
         self.write("/proc/self/mountinfo", "\n".join(self.mounts) + "\n")
 
     def run_shell(self, body, extra=""):
+        readers = self.readers
+        if not self.real_partition_reader:
+            readers += self.mock_partition_reader
         result = subprocess.run(["sh", "-c", f". {shlex.quote(str(COMMON))}\n" +
-                                 self.readers + extra + "\n" + body],
+                                 readers + extra + "\n" + body],
                                 env=self.env, text=True, capture_output=True, timeout=20)
         self.assertFalse((self.root / "refused").exists(), "A forbidden host/probe command was attempted")
         return result
@@ -209,7 +223,7 @@ storage_partition_value() {
     def test_emmc_system_blocks_only_emmc_and_keeps_usb_eligible(self):
         self.disk("mmcblk0", "179:0", "mmc", "0")
         self.disk("mmcblk1", "179:8", "sd")
-        self.partition("mmcblk0", "mmcblk0p2", "179:2")
+        self.partition("mmcblk0", "mmcblk0p2", "179:2", number=2)
         self.mounts = ["1 0 179:2 / / rw - ext4 /dev/root rw"]
         self.sync_mounts()
         self.write("/proc/cmdline", "root=/dev/mmcblk0p2")
@@ -713,29 +727,122 @@ storage_read_file() {
         self.write("/etc/config/fstab", "fstab.data=mount\nfstab.data.target='/sd/existing'\n")
         self.assert_global_error()
 
-    def test_real_partition_reader_uses_lowlevel_blkid_partition_tags_on_fixture_only(self):
-        probe = self.root / "commands/blkid"
-        probe.write_text('''#!/bin/sh
-[ "$#" = 6 ] && [ "$1" = -p ] && [ "$2" = -s ] && [ "$4" = -o ] && [ "$5" = value ] || exit 96
-[ "$6" = "$FX/dev/sda" ] || exit 96
-case "$3" in PART_ENTRY_UUID) printf 'abc-123';; PART_ENTRY_NAME) printf 'sys[1].*';; *) exit 96;; esac
-''')
-        # Restore production readers, then call only the probe with a fixture file.
-        result = self.run_shell('storage_partition_value "$FX/dev/sda" PARTUUID; printf "\\n"; '
-                                'storage_partition_value "$FX/dev/sda" PARTLABEL',
-                                f'. {shlex.quote(str(COMMON))}\n')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "abc-123\nsys[1].*")
+    def emmc_partlabel_fixture(self, label="rootfs"):
+        self.real_partition_reader = True
+        self.disk("mmcblk0", "179:0", "mmc", "0")
+        self.partition("mmcblk0", "mmcblk0p5", "179:5", label=label,
+                       uuid=ROOT_PARTUUID, number=5)
+        self.partition(label=None, uuid=DATA_PARTUUID)
+        self.mounts = ["1 0 179:5 / / ro - squashfs /dev/root ro"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", f"root=PARTLABEL={label}")
 
-    def test_nonzero_partition_probe_is_incomplete_evidence(self):
+    def partition_probe(self, mode):
+        """Only a strict, fixture-backed read double may replace the real program."""
+        self.write("/probe-mode", mode)
         probe = self.root / "commands/blkid"
         probe.write_text('''#!/bin/sh
-[ "$#" = 6 ] && [ "$6" = "$FX/dev/sda" ] || exit 96
-exit 2
+refuse() { printf '%s\\n' "$*" >> "$REFUSAL_LOG"; exit 97; }
+[ "$#" = 6 ] && [ "$1" = -p ] && [ "$2" = -s ] && [ "$4" = -o ] && [ "$5" = value ] || refuse "$@"
+[ "$3" = PART_ENTRY_UUID ] || refuse "$@"
+case "$6" in /dev/sda1|/dev/sdb1|/dev/mmcblk0p5) ;; *) refuse "$@";; esac
+[ -f "$FX$6" ] && [ -f "$FX/rdev/${6##*/}" ] || refuse "$@"
+printf '%s\\n' "$*" >> "$FX/probe-reads"
+case "$(cat "$FX/probe-mode")" in
+    busybox) printf '%s: UUID="filesystem-uuid-not-partuuid" TYPE="ext4"\\n' "$6";;
+    empty) exit 0;;
+    unavailable) exit 127;;
+    unreadable) printf '11111111-2222-3333-4444-555555555555'; exit 2;;
+    full) cat "$FX/metadata/${6##*/}.PARTUUID" || exit 2;;
+    *) refuse "$@";;
+esac
 ''')
-        result = self.run_shell('storage_partition_value "$FX/dev/sda" PARTUUID',
-                                f'. {shlex.quote(str(COMMON))}\n')
-        self.assertNotEqual(result.returncode, 0)
+
+    def test_review_i4_partlabel_emmc_root_works_without_full_blkid(self):
+        self.emmc_partlabel_fixture()
+        for mode in ("busybox", "unavailable"):
+            with self.subTest(mode=mode):
+                self.partition_probe(mode)
+                self.assertTrue(self.device()["eligible"])
+                self.assert_blocked("mmcblk0", "system")
+                self.assertEqual(self.validate()[0][0], "0")
+                self.assertFalse((self.root / "probe-reads").exists())
+
+    def test_review_i4_kernel_partname_is_literal_and_duplicates_block(self):
+        self.emmc_partlabel_fixture("sys[1].*")
+        self.partition_probe("unavailable")
+        self.attr("sda1", "uevent", (self.root / self.paths["sda1"].lstrip("/") / "uevent").read_text()
+                  + "PARTNAME=sys1anything\n")
+        self.assertTrue(self.device()["eligible"])
+        self.attr("sda1", "uevent", (self.root / self.paths["sda1"].lstrip("/") / "uevent").read_text()
+                  .replace("PARTNAME=sys1anything", "PARTNAME=sys[1].*"))
+        self.assert_global_error()
+
+    def test_review_i4_malformed_kernel_metadata_never_falls_back_to_probe(self):
+        self.emmc_partlabel_fixture()
+        self.partition_probe("full")
+        path = self.root / self.paths["mmcblk0p5"].lstrip("/") / "uevent"
+        original = path.read_text()
+        for metadata in ("", original.replace("PARTN=5\n", ""),
+                         original.replace("MAJOR=179", "MAJOR=8"),
+                         original.replace("DEVNAME=mmcblk0p5", "DEVNAME=sda1"),
+                         original.replace("DISKSEQ=12", "DISKSEQ=13"),
+                         original.replace("PARTN=5", "PARTN=05"),
+                         original.replace("DISKSEQ=12", "DISKSEQ=12.0"),
+                         original + "PARTNAME=other\n", original + "malformed\n"):
+            with self.subTest(metadata=metadata):
+                path.write_text(metadata)
+                self.assert_global_error()
+        path.unlink()
+        self.assert_global_error()
+        self.assertFalse((self.root / "probe-reads").exists())
+
+    def test_review_i4_partlabel_reader_preserves_rdev_and_alias_checks(self):
+        self.emmc_partlabel_fixture()
+        self.partition_probe("unavailable")
+        self.write("/rdev/mmcblk0p5", "8:1")
+        self.assert_global_error()
+        self.write("/rdev/mmcblk0p5", "179:5")
+        (self.root / "dev/mmcblk0p5").unlink()
+        self.link("/dev/mmcblk0p5", "/dev/sda1")
+        self.assert_global_error()
+
+    def test_review_i4_supported_partuuid_probe_protects_exact_backing_disk(self):
+        self.real_partition_reader = True
+        self.partition(label="not-a-uuid", uuid=ROOT_PARTUUID)
+        self.disk("sdb", "8:16")
+        self.partition("sdb", "sdb1", "8:17", uuid=DATA_PARTUUID)
+        self.partition_probe("full")
+        for root_uuid, data_uuid in ((ROOT_PARTUUID, DATA_PARTUUID), ("1234abcd-01", "abcd1234-01")):
+            with self.subTest(root_uuid=root_uuid):
+                self.write("/metadata/sda1.PARTUUID", root_uuid)
+                self.write("/metadata/sdb1.PARTUUID", data_uuid)
+                self.write("/proc/cmdline", f"root=PARTUUID={root_uuid}")
+                self.assert_blocked(reason="system")
+                self.assertTrue(self.device("sdb")["eligible"])
+                self.assertNotEqual(self.validate()[0][0], "0")
+
+    def test_review_i4_partuuid_unsupported_probe_never_uses_partname_or_empty_absence(self):
+        self.emmc_partlabel_fixture(ROOT_PARTUUID)
+        self.write("/proc/cmdline", f"root=PARTUUID={ROOT_PARTUUID}")
+        for mode in ("busybox", "empty", "unavailable", "unreadable"):
+            with self.subTest(mode=mode):
+                self.partition_probe(mode)
+                self.assert_global_error()
+                result = self.run_shell("storage_collect; storage_partition_value /dev/mmcblk0p5 PARTUUID")
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_review_i4_partuuid_malformed_probe_metadata_blocks(self):
+        self.emmc_partlabel_fixture()
+        self.partition_probe("full")
+        self.write("/proc/cmdline", f"root=PARTUUID={ROOT_PARTUUID}")
+        for value in ("", "abc-123", ROOT_PARTUUID + "\n" + ROOT_PARTUUID,
+                      'UUID="' + ROOT_PARTUUID + '"', ROOT_PARTUUID + "\t"):
+            with self.subTest(value=value):
+                self.write("/metadata/mmcblk0p5.PARTUUID", value)
+                self.assert_global_error()
+                result = self.run_shell("storage_collect; storage_partition_value /dev/mmcblk0p5 PARTUUID")
+                self.assertNotEqual(result.returncode, 0)
 
     def test_missing_proc_usage_evidence_blocks_globally(self):
         for path in ("proc/self/mountinfo", "proc/swaps", "proc/cmdline"):
