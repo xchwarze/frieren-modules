@@ -19,7 +19,7 @@ ROOT_PARTUUID = "11111111-2222-3333-4444-555555555555"
 DATA_PARTUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
-class StorageTests(unittest.TestCase):
+class StorageFixture(unittest.TestCase):
     def setUp(self):
         temp_parent = Path("/tmp/opencode")
         self.temp = tempfile.TemporaryDirectory(prefix="storage-",
@@ -220,6 +220,8 @@ storage_partition_value() {
         self.assertNotEqual(state[0], "0")
         self.assertEqual(state[1:], ["", "", ""])
 
+
+class StorageTests(StorageFixture):
     def test_emmc_system_blocks_only_emmc_and_keeps_usb_eligible(self):
         self.disk("mmcblk0", "179:0", "mmc", "0")
         self.disk("mmcblk1", "179:8", "sd")
