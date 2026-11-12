@@ -154,6 +154,27 @@ storage_install_environment() { fx-environment "$@"; }
                         self.assertEqual([call[0] for call in self.writers()], expected)
                         self.reset_mutation()
 
+    def test_overlapping_third_partition_after_mkswap_prevents_ext4_write(self):
+        self.partition(name="sda3", mm="8:3", number=3)
+        self.attr("sda3", "start", "4194304")
+        child = self.root / "sys/class/block/sda3"
+        for entry in ("format-device.sh", "auto-setup.sh"):
+            with self.subTest(entry=entry):
+                child.unlink()
+                (self.root / "calls").unlink(missing_ok=True)
+                self.write("/mkswap-mutation", "extra-partition")
+                result = self.invoke(entry)
+                self.assertEqual(self.writers(), [["fdisk", "/dev/sda"], ["mkswap", "/dev/sda1"]])
+                self.assert_failed(result)
+                self.assertTrue(child.is_symlink())
+                self.assertNotIn("Formatted swap", result.stdout)
+
+    def test_changed_data_geometry_after_mkswap_does_not_recapture_trust(self):
+        self.write("/mkswap-mutation", "shifted-data")
+        result = self.invoke("format-device.sh")
+        self.assertEqual(self.writers(), [["fdisk", "/dev/sda"], ["mkswap", "/dev/sda1"]])
+        self.assert_failed(result)
+
     def test_writer_failures_propagate_and_lock_is_reusable(self):
         for failed, expected in (("fdisk", ["fdisk"]), ("mkswap", ["fdisk", "mkswap"]),
                                  ("mkfs.ext4", ["fdisk", "mkswap", "mkfs.ext4"])):
@@ -265,6 +286,17 @@ storage_install_environment() { fx-environment "$@"; }
         result = self.invoke()
         self.assert_failed(result)
         self.assertNotIn("fx-environment", [call[0] for call in self.calls()])
+
+    def test_foreign_swapfile_after_mount_prevents_selected_swapon_and_environment(self):
+        self.write("/mount-mutation", "foreign-swapfile")
+        result = self.invoke()
+        self.assertEqual(self.writers(), [["fdisk", "/dev/sda"], ["mkswap", "/dev/sda1"],
+                                         ["mkfs.ext4", "-F", "/dev/sda2"],
+                                         ["mount", "/dev/sda2", "/sd"]])
+        self.assert_failed(result)
+        self.assertNotIn("fx-environment", [call[0] for call in self.calls()])
+        self.assertTrue((self.root / "sd/foreign.swap").is_file())
+        self.assertIn("/sd/foreign.swap file 100 0 -2\n", (self.root / "proc/swaps").read_text())
 
     def test_mount_swap_and_environment_failures_never_report_success(self):
         original = (self.root / "config/fstab").read_bytes()
@@ -379,6 +411,23 @@ def mutate(mode):
         (root / "etc/config/fstab").write_text("fstab.owner=mount\nfstab.owner.target='/sd'\n")
     elif mode == "sd-alias":
         (root / "sd").symlink_to(root / "media")
+    elif mode == "extra-partition":
+        child = disk / "sda3"
+        if command != "mkswap" or selected != "/dev/sda" or not (child / "partition").is_file():
+            refuse()
+        link = root / "sys/class/block/sda3"
+        link.symlink_to(os.path.relpath(child, link.parent))
+    elif mode == "shifted-data":
+        if command != "mkswap" or selected != "/dev/sda":
+            refuse()
+        (disk / "sda2/start").write_text("2099201")
+        (disk / "sda2/size").write_text("14678015")
+    elif mode == "foreign-swapfile":
+        if command != "mount" or selected != "/dev/sda" or not (root / "sd").is_dir():
+            refuse()
+        (root / "sd/foreign.swap").write_text("fixture unexpected swapfile")
+        with (root / "proc/swaps").open("a") as file:
+            file.write("/sd/foreign.swap file 100 0 -2\n")
     else:
         refuse()
 

@@ -74,17 +74,20 @@ EOF
         [ "$sf_data_start" -ge "$((sf_swap_start + sf_swap_size))" ] &&
         [ "$((sf_data_start + sf_data_size))" -le "$sf_capacity" ]
 }
-storage_same_partitions() {
+storage_same_partitions() (
+    # Re-enumerate the entire child set without replacing the captured trust.
+    ST_NODES=$(storage_list_dir /sys/class/block) || return 1
     sf_disk_holders=$(storage_list_dir "/sys/class/block/$1/holders") || return 1
     if [ -n "$sf_disk_holders" ] || [ "$(storage_read_file "/sys/class/block/$1/ro")" != 0 ]; then
         storage_format_error 'Selected disk became held or read-only.'; return 1
     fi
     if ! { [ "$(storage_identity "$1")" = "$2" ] &&
-        [ "$(storage_partition_snapshot "$SF_SWAP" "$1")" = "$SF_SWAP_SNAPSHOT" ] &&
-        [ "$(storage_partition_snapshot "$SF_DATA" "$1")" = "$SF_DATA_SNAPSHOT" ]; }; then
-        storage_format_error 'Selected disk or partition identity changed.'; return 1;
+        storage_find_partitions "$1" "$2" &&
+        [ "$STORAGE_SWAP_PART" = "$SF_SWAP" ] && [ "$STORAGE_DATA_PART" = "$SF_DATA" ] &&
+        [ "$sf_swap_snapshot" = "$SF_SWAP_SNAPSHOT" ] && [ "$sf_data_snapshot" = "$SF_DATA_SNAPSHOT" ]; }; then
+        storage_format_error 'Selected disk or partition topology/identity changed.'; return 1;
     fi
-}
+)
 storage_guard_partitions() {
     storage_validate_target "$@" && storage_same_partitions "$1" "$2"
 }
@@ -166,12 +169,16 @@ storage_activation_guard() {
     sf_disk_mm=$(storage_block_mm "/dev/$1") || return 1
     sf_swap_mm=$(storage_block_mm "$SF_SWAP") || return 1
     sf_data_mm=$(storage_block_mm "$SF_DATA") || return 1
-    printf '%s\n' "$sf_live_mounts" | awk -v disk="$sf_disk_mm" -v swap="$sf_swap_mm" -v data="$sf_data_mm" -v mounted="$3" '
+    # Swapfile backing must use this validated snapshot, including our new /sd mount.
+    # storage_backing_path in storage-common.sh consumes this caller-owned context.
+    # shellcheck disable=SC2034
+    ST_MOUNTS=$(printf '%s\n' "$sf_live_mounts" | awk -v disk="$sf_disk_mm" -v swap="$sf_swap_mm" -v data="$sf_data_mm" -v mounted="$3" '
         {sep=0;for(i=7;i<=NF;i++)if($i=="-"){sep=i;break}
-         if(NF<10 || !sep || NF!=sep+3 || $3!~/^[0-9]+:[0-9]+$/ || $5!~/^\//)bad=1}
+         if(NF<10 || !sep || NF!=sep+3 || $3!~/^[0-9]+:[0-9]+$/ || $5!~/^\//)bad=1
+         print $3,$5,$(sep+1),$(sep+2),$(sep+3)}
         $5=="/sd" && $3==data && mounted==1 && $(sep+1)=="ext4" {owned++;next}
         $5=="/sd" || index($5,"/sd/")==1 || $3==disk || $3==swap || $3==data {bad=1}
-        END {exit (bad || owned!=mounted)}' || {
+        END {exit (bad || owned!=mounted)}') || {
         storage_format_error 'Selected device or /sd mount usage changed.'; return 1;
     }
     sf_live_swaps=$(storage_read_file /proc/swaps) || return 1
