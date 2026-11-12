@@ -32,8 +32,15 @@ class StorageTests(unittest.TestCase):
         self.write("/proc/cmdline", "console=ttyS0 root=ubi0:rootfs")
         self.write("/proc/swaps", "Filename\tType\tSize\tUsed\tPriority\n")
         self.write("/proc/mtd", 'dev: size erasesize name\nmtd4: 01000000 00020000 "ubi"\n')
-        self.write("/sys/class/ubi/ubi0/mtd_num", "4")
-        (self.root / "sys/class/mtd/mtd4").mkdir(parents=True)
+        self.mtd_path = "/sys/devices/platform/spi0/spi0.0/mtd/mtd4"
+        self.write(f"{self.mtd_path}/type", "nand")
+        self.write(f"{self.mtd_path}/name", "ubi")
+        self.link("/sys/class/mtd/mtd4", self.mtd_path)
+        self.ubi_path = f"{self.mtd_path}/ubi0"
+        self.write(f"{self.ubi_path}/mtd_num", "4")
+        self.link("/sys/class/ubi/ubi0", self.ubi_path)
+        self.ubi_volume(0, "rootfs")
+        self.ubi_volume(1, "rootfs_data")
         self.write("/etc/config/fstab", "")
         self.mounts = ["1 0 0:20 / / rw - ubifs ubi0:rootfs rw"]
         self.sync_mounts()
@@ -63,8 +70,13 @@ storage_realpath() {
     case "$result" in "$FX"/*) printf '%s\n' "${result#"$FX"}";; *) return 1;; esac
 }
 storage_path_exists() { [ -e "$FX$1" ]; }
-storage_is_block() { [ -f "$FX$1" ]; }
+storage_is_symlink() { [ -L "$FX$1" ]; }
+storage_is_block() (
+    canonical=$(storage_realpath "$1") || return 1
+    [ -f "$FX$canonical" ] && [ -f "$FX/rdev/${canonical##*/}" ]
+)
 storage_block_mm() { cat "$FX/rdev/${1##*/}"; }
+storage_char_mm() { cat "$FX/chrdev/${1##*/}"; }
 storage_read_fstab() { cat "$FX/etc/config/fstab"; }
 storage_partition_value() {
     [ ! -e "$FX/metadata/fail" ] || return 1
@@ -83,8 +95,10 @@ storage_partition_value() {
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(os.path.relpath(self.root / target.lstrip("/"), link.parent))
 
-    def disk(self, name, mm, transport="usb", removable="1", connection="removable"):
-        if transport == "usb":
+    def disk(self, name, mm, transport="usb", removable="1", connection="removable", sysfs_path=None):
+        if sysfs_path:
+            path = sysfs_path
+        elif transport == "usb":
             ancestor = f"/sys/devices/platform/usb-{name}/1-1"
             self.link(f"{ancestor}/subsystem", "/sys/bus/usb")
             self.write(f"{ancestor}/uevent", "DEVTYPE=usb_device\n")
@@ -107,6 +121,18 @@ storage_partition_value() {
         self.write(f"/rdev/{name}", mm)
         return path
 
+    def ubi_volume(self, number, name):
+        volume = f"{self.ubi_path}/ubi0_{number}"
+        self.write(f"{volume}/name", name)
+        self.write(f"{volume}/dev", f"250:{number + 1}")
+        self.link(f"/sys/class/ubi/ubi0_{number}", volume)
+        self.write(f"/dev/ubi0_{number}", "fixture character node marker")
+        self.write(f"/chrdev/ubi0_{number}", f"250:{number + 1}")
+
+    def mtdblock(self):
+        self.disk("mtdblock4", "31:4", "unknown", "0",
+                  sysfs_path=f"{self.mtd_path}/mtdblock4")
+
     def partition(self, disk="sda", name="sda1", mm="8:1", label=None, uuid=None):
         path = f"{self.paths[disk]}/{name}"
         self.paths[name] = path
@@ -125,6 +151,11 @@ storage_partition_value() {
         self.write(f"{self.paths[name]}/{attribute}", value)
 
     def sync_mounts(self):
+        for row in self.mounts:
+            fields = row.split()
+            if len(fields) >= 5 and fields[4].startswith("/"):
+                point = fields[4].replace("\\040", " ").replace("\\134", "\\")
+                (self.root / point.lstrip("/")).mkdir(parents=True, exist_ok=True)
         self.write("/proc/self/mountinfo", "\n".join(self.mounts) + "\n")
 
     def run_shell(self, body, extra=""):
@@ -293,6 +324,7 @@ storage_partition_value() {
                        "2 0 8:17 / /overlay rw - ext4 /dev/sdb1 rw",
                        "3 0 0:30 / / rw - overlay overlay rw,lowerdir=/rom,upperdir=/overlay/upper,workdir=/overlay/work"]
         self.sync_mounts()
+        (self.root / "overlay/upper").mkdir()
         self.write("/proc/cmdline", "root=/dev/sda1")
         self.assert_blocked(reason="system")
         self.assert_blocked("sdb", "system")
@@ -316,6 +348,7 @@ storage_partition_value() {
         self.partition()
         self.disk("loop0", "7:0", "unknown")
         self.attr("loop0", "loop/backing_file", "/backing/root.img")
+        self.write("/backing/root.img", "fixture loop image")
         self.mounts = ["1 0 8:1 / /backing rw - ext4 /dev/sda1 rw",
                        "2 0 7:0 / / ro - squashfs /dev/loop0 ro"]
         self.sync_mounts()
@@ -326,6 +359,7 @@ storage_partition_value() {
         self.partition()
         self.disk("loop0", "7:0", "unknown")
         self.attr("loop0", "loop/backing_file", "/backing USB/root.img")
+        self.write("/backing USB/root.img", "fixture loop image")
         self.mounts = ["1 0 8:1 / /backing\\040USB rw - ext4 /dev/sda1 rw",
                        "2 0 7:0 / / ro - squashfs /dev/loop0 ro"]
         self.sync_mounts()
@@ -348,6 +382,7 @@ storage_partition_value() {
 
     def test_known_ubi_and_mtd_roots_leave_external_disks_eligible(self):
         self.assertTrue(self.device()["eligible"])
+        self.mtdblock()
         self.mounts = ["1 0 31:4 / / ro - squashfs /dev/mtdblock4 ro"]
         self.sync_mounts()
         self.write("/proc/cmdline", "root=/dev/mtdblock4")
@@ -382,6 +417,7 @@ storage_partition_value() {
         self.mounts.append("2 1 8:1 / /data rw - ext4 /dev/sda1 rw")
         self.sync_mounts()
         self.write("/proc/swaps", "Filename Type Size Used Priority\n/data/swapfile file 100 0 -2\n")
+        self.write("/data/swapfile", "fixture swapfile")
         self.assertTrue(self.assert_blocked()["swaps"])
 
     def test_unknown_swap_backing_blocks_globally(self):
@@ -523,12 +559,155 @@ storage_read_file() {
         self.write("/proc/cmdline", "root=PARTUUID=abc-123")
         self.assert_global_error()
 
-    def test_ubi_volume_node_is_known_flash_only_with_mtd_evidence(self):
-        self.write("/sys/class/ubi/ubi0_1/mtd_num", "4")
+    def test_review_i2_ubi_volume_node_uses_verified_parent_mtd_metadata(self):
         self.mounts = ["1 0 0:20 / / rw - ubifs /dev/ubi0_1 rw"]
         self.sync_mounts()
         self.write("/proc/cmdline", "root=/dev/ubi0_1")
         self.assertTrue(self.device()["eligible"])
+        self.assertEqual(self.validate()[0][0], "0")
+
+    def test_review_c1_anonymous_btrfs_mount_blocks_globally(self):
+        self.partition()
+        self.disk("sdb", "8:16")
+        self.partition("sdb", "sdb1", "8:17")
+        self.mounts.append("2 1 0:42 / /media rw - btrfs /dev/sda1 rw")
+        self.sync_mounts()
+        self.assert_global_error()
+
+    def test_review_c1_unknown_anonymous_filesystem_is_not_a_pseudo_exemption(self):
+        self.mounts.append("2 1 0:42 / /media rw - unknownfs none rw")
+        self.sync_mounts()
+        self.assert_global_error()
+
+    def test_review_c1_known_pseudofilesystems_preserve_eligible_storage(self):
+        for number, (fs, point) in enumerate((("tmpfs", "/tmp"), ("proc", "/proc"),
+                                            ("sysfs", "/sys"), ("devtmpfs", "/dev")), 2):
+            self.mounts.append(f"{number} 1 0:{number} / {point} rw - {fs} {fs} rw")
+        self.sync_mounts()
+        self.assertTrue(self.device()["eligible"])
+
+    def test_review_c2_block_backed_loop_protects_system_and_ordinary_mounts(self):
+        self.partition()
+        self.disk("loop0", "7:0", "unknown")
+        self.link("/dev/backing-alias", "/dev/sda1")
+        root_mount = self.mounts[0]
+        for backing in ("/dev/sda", "/dev/sda1", "/dev/backing-alias"):
+            for point, reason in (("/overlay", "system"), ("/media", "mounted")):
+                with self.subTest(backing=backing, point=point):
+                    self.attr("loop0", "loop/backing_file", backing)
+                    self.mounts = [root_mount, "2 1 0:21 / /dev rw - tmpfs tmpfs rw",
+                                   f"3 1 7:0 / {point} rw - ext4 /dev/loop0 rw"]
+                    self.sync_mounts()
+                    device = self.assert_blocked(reason=reason)
+                    self.assertIn(point, device["mounts"])
+                    self.assertNotEqual(self.validate()[0][0], "0")
+
+    def test_review_c2_unresolved_block_backed_loop_is_not_tmpfs(self):
+        self.disk("loop0", "7:0", "unknown")
+        self.attr("loop0", "loop/backing_file", "/dev/missing")
+        self.mounts.extend(["2 1 0:21 / /dev rw - tmpfs tmpfs rw",
+                            "3 1 7:0 / /overlay rw - ext4 /dev/loop0 rw"])
+        self.sync_mounts()
+        self.assert_global_error()
+
+    def test_review_c2_missing_backing_path_cannot_be_assumed_a_regular_image(self):
+        self.disk("loop0", "7:0", "unknown")
+        self.attr("loop0", "loop/backing_file", "/removed/block-alias")
+        self.mounts.append("2 1 7:0 / /overlay rw - ext4 /dev/loop0 rw")
+        self.sync_mounts()
+        self.assert_global_error()
+
+    def test_review_c3_block2mtd_system_storage_is_not_physical_flash(self):
+        self.partition()
+        self.write(f"{self.mtd_path}/type", "ram")
+        self.write(f"{self.mtd_path}/name", "block2mtd: /dev/sda1")
+        self.write("/proc/mtd", 'dev: size erasesize name\nmtd4: 01000000 00020000 "block2mtd: /dev/sda1"\n')
+        with self.subTest(source="ubi"):
+            self.assert_global_error()
+        self.mtdblock()
+        self.mounts = ["1 0 31:4 / / ro - squashfs /dev/mtdblock4 ro"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", "root=/dev/mtdblock4")
+        with self.subTest(source="mtdblock"):
+            self.assert_global_error()
+
+    def test_review_c3_missing_mtd_type_cannot_establish_physical_flash(self):
+        (self.root / self.mtd_path.lstrip("/") / "type").unlink()
+        self.assert_global_error()
+
+    def test_review_i1_flash_named_alias_protects_actual_root_disk(self):
+        self.partition()
+        self.link("/dev/mtdblock4", "/dev/sda1")
+        self.mounts = ["1 0 8:1 / / rw - ext4 /dev/mtdblock4 rw"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", "root=/dev/mtdblock4")
+        self.assert_blocked(reason="system")
+        self.assertNotEqual(self.validate()[0][0], "0")
+
+    def test_review_i1_conflicting_mount_and_source_rdev_block_globally(self):
+        self.partition()
+        self.mtdblock()
+        self.mounts = ["1 0 8:1 / / rw - ext4 /dev/mtdblock4 rw"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", "root=/dev/sda1")
+        self.assert_global_error()
+
+    def test_review_i2_ubi_overlay_uses_real_parent_only_layout(self):
+        self.disk("mmcblk1", "179:8", "sd")
+        self.mounts = ["1 0 0:20 / /rom ro - ubifs ubi0:rootfs ro",
+                       "2 0 0:21 / /overlay rw - ubifs /dev/ubi0_1 rw",
+                       "3 0 0:30 / / rw - overlay overlay rw,lowerdir=/rom,upperdir=/overlay/upper,workdir=/overlay/work"]
+        self.sync_mounts()
+        (self.root / "overlay/upper").mkdir()
+        self.assertTrue(self.device()["eligible"])
+        self.assertTrue(self.device("mmcblk1")["eligible"])
+
+    def test_review_i2_ubiblock_uses_its_volume_parent_and_parent_mtd_metadata(self):
+        self.disk("ubiblock0_0", "254:0", "unknown", "0",
+                  sysfs_path=f"{self.ubi_path}/ubi0_0/ubiblock0_0")
+        self.mounts = ["1 0 254:0 / / ro - squashfs /dev/ubiblock0_0 ro"]
+        self.sync_mounts()
+        self.write("/proc/cmdline", "root=/dev/ubiblock0_0")
+        self.assertTrue(self.device()["eligible"])
+        self.assertEqual(self.validate()[0][0], "0")
+
+    def test_review_i2_volume_parent_mismatch_blocks_globally(self):
+        (self.root / "sys/class/ubi/ubi0_1").unlink()
+        self.write("/sys/devices/unrelated/ubi0_1/name", "rootfs_data")
+        self.link("/sys/class/ubi/ubi0_1", "/sys/devices/unrelated/ubi0_1")
+        self.mounts = ["1 0 0:20 / / rw - ubifs /dev/ubi0_1 rw"]
+        self.sync_mounts()
+        self.assert_global_error()
+
+    def test_review_i3_aliased_sd_destination_blocks_globally(self):
+        self.disk("sdb", "8:16")
+        self.partition("sdb", "sdb1", "8:17")
+        (self.root / "media").mkdir()
+        self.link("/sd", "/media")
+        self.mounts.append("2 1 8:17 / /media rw - ext4 /dev/sdb1 rw")
+        self.sync_mounts()
+        self.assert_global_error()
+
+    def test_review_i3_dangling_sd_alias_is_not_a_safe_destination(self):
+        self.link("/sd", "/missing/destination")
+        self.assert_global_error()
+
+    def test_review_i3_configured_target_alias_is_checked_canonically(self):
+        (self.root / "sd").mkdir()
+        (self.root / "media").mkdir()
+        self.link("/configured-alias", "/sd")
+        for target in ("/configured-alias", "/media/../sd"):
+            with self.subTest(target=target):
+                self.write("/etc/config/fstab", f"fstab.data=mount\nfstab.data.target='{target}'\n")
+                self.assert_global_error()
+
+    def test_review_i3_canonical_unoccupied_sd_directory_is_allowed(self):
+        (self.root / "sd").mkdir()
+        self.assertTrue(self.device()["eligible"])
+
+    def test_review_i3_sd_regular_file_is_a_conflicting_destination(self):
+        self.write("/sd", "unrelated data")
+        self.assert_global_error()
 
     def test_fstab_sd_subdirectory_conflicts_are_not_ignored(self):
         self.write("/etc/config/fstab", "fstab.data=mount\nfstab.data.target='/sd/existing'\n")

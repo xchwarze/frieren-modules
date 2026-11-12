@@ -8,9 +8,17 @@
 storage_read_file() { cat "$1"; }
 storage_realpath() { readlink -f "$1"; }
 storage_path_exists() { [ -e "$1" ]; }
+storage_is_symlink() { [ -L "$1" ]; }
 storage_is_block() { [ -b "$1" ]; }
 storage_block_mm() (
     storage_is_block "$1" || return 1
+    storage_rdev_mm "$1"
+)
+storage_char_mm() (
+    [ -c "$1" ] || return 1
+    storage_rdev_mm "$1"
+)
+storage_rdev_mm() (
     pair=$(stat -L -c '%t:%T' "$1") || return 1
     major=${pair%:*}; minor=${pair#*:}
     case "$major" in ''|*[!0-9a-fA-F]*) return 1;; esac
@@ -102,23 +110,78 @@ storage_parent() (
     storage_contains "$ST_DISKS" "$parent" || return 1
     printf '%s\n' "$parent"
 )
+storage_physical_mtd() (
+    storage_uint "$1" || return 1
+    mtd=$(storage_realpath "/sys/class/mtd/mtd$1") || return 1
+    case "$mtd" in /sys/devices/virtual/*) return 1;; /sys/devices/*) ;; *) return 1;; esac
+    [ "${mtd##*/}" = "mtd$1" ] || return 1
+    type=$(storage_read_file "$mtd/type") || return 1
+    # MTD registration alone also admits block2mtd, RAM, and simulated storage.
+    case "$type" in nor|nand|mlc-nand|dataflash) ;; *) return 1;; esac
+    name=$(storage_read_file "$mtd/name") || return 1
+    case "$name" in ''|block2mtd:*) return 1;; esac
+    proc_name=$(storage_read_file /proc/mtd | awk -v key="mtd$1:" '
+        $1==key {line=$0;sub(/^[^"]*"/,"",line);sub(/"$/,"",line);name=line;count++}
+        END {if(count!=1)exit 1;print name}') || return 1
+    [ "$proc_name" = "$name" ] || return 1
+    printf '%s\n' flash
+)
+storage_ubi_volume() (
+    storage_uint "$1" && storage_uint "$2" || return 1
+    parent=$(storage_realpath "/sys/class/ubi/ubi$1") || return 1
+    volume=$(storage_realpath "/sys/class/ubi/ubi${1}_$2") || return 1
+    [ "${parent##*/}" = "ubi$1" ] && [ "${volume##*/}" = "ubi${1}_$2" ] || return 1
+    [ "${volume%/*}" = "$parent" ] || return 1
+    number=$(storage_read_file "$parent/mtd_num") || return 1
+    storage_uint "$number" || return 1
+    [ "${parent%/*}" = "$(storage_realpath "/sys/class/mtd/mtd$number")" ] || return 1
+    printf '%s\n' "$volume"
+)
 storage_flash() (
     case "$1" in
-        /dev/mtdblock[0-9]*) number=${1#/dev/mtdblock};;
+        /dev/*)
+            canonical=$(storage_realpath "$1") || return 1
+            case "$canonical" in
+                /dev/mtdblock*)
+                    number=${canonical#/dev/mtdblock}
+                    storage_uint "$number" || return 1
+                    [ "$(storage_node_path "$canonical")" = "mtdblock$number" ] || return 1
+                    block=$(storage_realpath "/sys/class/block/mtdblock$number") || return 1
+                    [ "${block%/*}" = "$(storage_realpath "/sys/class/mtd/mtd$number")" ] || return 1;;
+                /dev/ubiblock*|/dev/ubi*_*)
+                    name=${canonical#/dev/ubi}; name=${name#block}
+                    ubi=${name%_*}; index=${name#*_}
+                    volume=$(storage_ubi_volume "$ubi" "$index") || return 1
+                    case "$canonical" in /dev/ubiblock*)
+                        [ "$(storage_node_path "$canonical")" = "${canonical#/dev/}" ] || return 1
+                        block=$(storage_realpath "/sys/class/block/${canonical#/dev/}") || return 1
+                        [ "${block%/*}" = "$volume" ] || return 1;;
+                    *)
+                        dev=$(storage_read_file "$volume/dev") || return 1
+                        storage_mm_valid "$dev" && [ "$(storage_char_mm "$canonical")" = "$dev" ] || return 1;;
+                    esac
+                    number=$(storage_read_file "${volume%/*}/mtd_num") || return 1;;
+                *) return 1;;
+            esac;;
         ubi[0-9]*:*)
-            ubi=${1%%:*}
-            number=$(storage_read_file "/sys/class/ubi/$ubi/mtd_num") || return 1;;
-        /dev/ubiblock[0-9]*_[0-9]*)
-            ubi=ubi${1#/dev/ubiblock}
-            number=$(storage_read_file "/sys/class/ubi/$ubi/mtd_num") || return 1;;
-        /dev/ubi[0-9]*_[0-9]*)
-            ubi=${1#/dev/}
-            number=$(storage_read_file "/sys/class/ubi/$ubi/mtd_num") || return 1;;
+            ubi=${1%%:*}; ubi=${ubi#ubi}; wanted=${1#*:}; match=
+            storage_uint "$ubi" && [ -n "$wanted" ] || return 1
+            entries=$(storage_list_dir "/sys/class/ubi/ubi$ubi") || return 1
+            while IFS= read -r entry; do
+                case "$entry" in "ubi${ubi}_"*) ;; *) continue;; esac
+                volume=$(storage_ubi_volume "$ubi" "${entry#"ubi${ubi}_"}") || return 1
+                if [ "$(storage_read_file "$volume/name")" = "$wanted" ]; then
+                    [ -z "$match" ] || return 1
+                    match=$volume
+                fi
+            done <<EOF
+$entries
+EOF
+            [ -n "$match" ] || return 1
+            number=$(storage_read_file "${match%/*}/mtd_num") || return 1;;
         *) return 1;;
     esac
-    storage_uint "$number" && storage_path_exists "/sys/class/mtd/mtd$number" || return 1
-    storage_read_file /proc/mtd | awk -v key="mtd$number:" '$1 == key {found=1} END {exit !found}' || return 1
-    printf '%s\n' flash
+    storage_physical_mtd "$number"
 )
 
 # Topology resolvers run in subshells: recursion never overwrites caller state.
@@ -127,6 +190,7 @@ storage_backing_node() (
     [ "$2" -lt 16 ] || return 1
     node=$1; depth=$(( $2 + 1 ))
     storage_contains "$ST_NODES" "$node" || return 1
+    case "$node" in mtdblock*|ubiblock*) storage_flash "/dev/$node"; return $?;; esac
     if storage_path_exists "/sys/class/block/$node/partition"; then
         parent=$(storage_parent "$node") || return 1
         storage_backing_node "$parent" "$depth"
@@ -153,13 +217,22 @@ storage_backing_path() (
     [ "$2" -lt 16 ] || return 1
     case "$1" in /*) ;; *) return 1;; esac
     case "$1" in *//*|*/./*|*/../*|*/.|*/..) return 1;; esac
+    storage_path_exists "$1" || return 1
+    canonical_path=$(storage_realpath "$1") || return 1
+    # A loop can hold a block device open; /dev's filesystem is not its backing.
+    if storage_is_block "$1"; then
+        node=$(storage_node_path "$1") || return 1
+        storage_backing_node "$node" "$(( $2 + 1 ))"
+        return $?
+    fi
+    case "$canonical_path" in /dev/*) return 1;; esac
     # Loop backing_file is literal; mountinfo, overlay, and swaps encode paths.
     # Shell literal comparisons avoid awk -v interpreting backslash escapes.
     record=; best=0
     while read -r mm point fs source options; do
         [ -n "$mm" ] || continue
         mountpoint=$(storage_unescape "$point")
-        case "$1" in "$mountpoint"|"$mountpoint"/*) matches=1;; *) matches=0;; esac
+        case "$canonical_path" in "$mountpoint"|"$mountpoint"/*) matches=1;; *) matches=0;; esac
         if [ "$mountpoint" = / ] || [ "$matches" -eq 1 ]; then
             if [ "${#mountpoint}" -gt "$best" ]; then
                 best=${#mountpoint}; record="$mm $point $fs $source $options"
@@ -177,8 +250,21 @@ storage_backing_mount() (
     read -r mm _point fs source options <<EOF
 $1
 EOF
-    if storage_flash "$source" 2>/dev/null; then return 0; fi
+    # Anonymous Btrfs superblocks may span disks absent from the source path.
+    [ "$fs" != btrfs ] || return 1
+    # mountinfo identity takes precedence over a flash-looking source spelling.
+    case "$mm" in 0:*) ;; *)
+        node=$(storage_node_mm "$mm") || return 1
+        case "$source" in /dev/*)
+            if storage_path_exists "$source" || storage_is_symlink "$source"; then
+                [ "$(storage_node_path "$source")" = "$node" ] || return 1
+            fi;;
+        esac
+        storage_backing_node "$node" "$depth"
+        return $?;;
+    esac
     case "$fs" in
+        ubifs|jffs2) storage_flash "$source";;
         overlay|overlayfs)
             paths=$(printf '%s\n' "$options" | awk -F, '
                 { for(i=1;i<=NF;i++) {
@@ -218,14 +304,21 @@ EOF
             [ -n "$matches" ] || return 1
             storage_backing_node "$matches" 0;;
         *)
-            if storage_flash "$1" 2>/dev/null; then return 0; fi
-            node=$(storage_node_path "$1") || return 1
-            storage_backing_node "$node" 0;;
+            if storage_is_block "$1"; then
+                node=$(storage_node_path "$1") || return 1
+                storage_backing_node "$node" 0
+            else storage_flash "$1"; fi;;
     esac
 )
 
 storage_collect() {
     ST_ERROR=; ST_SYSTEM=; ST_USAGE=; ST_DISKS=; ST_NODES=; ST_MOUNTS=
+    # Do not erase a disk before discovering that /sd aliases an occupied path.
+    if storage_path_exists /sd || storage_is_symlink /sd; then
+        st_destination=$(storage_realpath /sd 2>/dev/null) || storage_error 'Cannot resolve /sd destination.'
+        [ "$st_destination" = /sd ] || storage_error 'Aliased /sd destination is not supported.'
+        storage_list_dir /sd >/dev/null 2>&1 || storage_error 'Conflicting or unreadable /sd destination.'
+    fi
     st_raw_nodes=$(storage_list_dir /sys/class/block 2>/dev/null) || storage_error 'Cannot enumerate block devices.'
     while IFS= read -r st_node; do
         [ -n "$st_node" ] || continue
@@ -260,8 +353,11 @@ EOF
         case "$st_point" in /|/rom|/overlay|/boot) st_critical=1;; esac
         [ "$st_point" != / ] || st_root_seen=1
         # Ignore ordinary pseudo-filesystems; critical mounts still need proof.
-        case "$st_mm:$st_fs" in 0:*:*)
-            case "$st_fs" in overlay|overlayfs|ubifs) ;; *) [ -n "$st_critical" ] || continue;; esac;;
+        case "$st_mm" in 0:*)
+            case "$st_fs" in
+                proc|sysfs|tmpfs|ramfs|devtmpfs|devpts|cgroup|cgroup2|debugfs|tracefs|securityfs|configfs|pstore|bpf|mqueue|hugetlbfs|fusectl|binfmt_misc|nsfs)
+                    [ -n "$st_critical" ] || continue;;
+            esac;;
         esac
         if ! st_backing=$(storage_backing_mount "$st_mm $st_point $st_fs $st_source $st_options" 0 2>/dev/null); then
             storage_error "Cannot resolve mounted backing storage: $st_point"; continue
@@ -322,10 +418,19 @@ EOF
 $st_swap_rows
 EOF
     st_fstab=$(storage_read_fstab 2>/dev/null) || storage_error 'Cannot inspect fstab configuration.'
-    if printf '%s\n' "$st_fstab" | awk -F= '
-        $1 ~ /^fstab\.[^.]+\.target$/ {value=substr($0,index($0,"=")+1);gsub(/^\047|\047$/,"",value)
-            if(value=="/sd" || index(value,"/sd/")==1)found=1}
-        END {exit !found}'; then storage_error 'Conflicting /sd fstab configuration.'; fi
+    st_targets=$(printf '%s\n' "$st_fstab" | awk -F= '
+        $1 ~ /^fstab\.[^.]+\.target$/ {value=substr($0,index($0,"=")+1);gsub(/^\047|\047$/,"",value);print value}')
+    while IFS= read -r st_target; do
+        [ -n "$st_target" ] || continue
+        case "$st_target" in /sd|/sd/*) storage_error 'Conflicting /sd fstab configuration.'; continue;;
+            /*) ;; *) storage_error 'Cannot resolve fstab destination.'; continue;; esac
+        if ! st_resolved=$(storage_realpath "$st_target" 2>/dev/null); then
+            storage_error 'Cannot resolve fstab destination.'; continue
+        fi
+        case "$st_resolved" in /sd|/sd/*) storage_error 'Conflicting /sd fstab configuration.';; esac
+    done <<EOF
+$st_targets
+EOF
 }
 
 storage_identity() (
