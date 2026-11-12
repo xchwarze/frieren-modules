@@ -36,7 +36,7 @@
 - Existing `auto-setup.sh`, `format-device.sh`, `post-format.sh`: explicit-selection entry points and targeted setup/configuration.
 - `usbstorage/public/StorageDeviceHelper.php`: inventory decoding and request validation; controller integrates it without framework changes.
 - UI: existing SetupCard, a focused device-list component and confirmation component, one inventory hook, and updated start/status hooks/query keys.
-- Tests: `usbstorage/tests-shell/test_storage.py`, `usbstorage/tests-php/storage_test.php`, `usbstorage/tests-js/SetupCard.test.jsx`, and module-local Vitest configuration.
+- Tests: `usbstorage/tests-shell/test_storage.py`, `usbstorage/tests-shell/test_formatting.py`, `usbstorage/tests-php/storage_test.php`, `usbstorage/tests-js/SetupCard.test.jsx`, and module-local Vitest configuration.
 - Delivery: module README, consistent package/manifest version, lockfile, and a focused GitHub Actions workflow.
 
 Inventory contract: `{devices: Device[], error: string|null}`. Each Device has `id`, `path`, `model`, `sizeBytes`, `transport` (`usb`, `sd`, `mmc`, `unknown`), `connection` (`removable`, `fixed`, `unknown`), `identity`, `eligible`, `reason` (`string|null`), `warnings` (`string[]`), `partitions`, `mounts`, and `swaps`. Partition entries include at least canonical `path` and size. An unresolved global safety state sets `error` and makes every device ineligible.
@@ -61,7 +61,7 @@ Identity snapshot: boot ID, whole-disk major/minor, kernel disk sequence, and se
 
 ### Task 2: Guarded formatting and selected-partition configuration
 
-**Files:** Create `usbstorage/public/bin/storage-format.sh`; modify `auto-setup.sh`, `format-device.sh`, `post-format.sh`; extend `tests-shell/test_storage.py`.
+**Files:** Create `usbstorage/public/bin/storage-format.sh` and `usbstorage/tests-shell/test_formatting.py`; modify `auto-setup.sh`, `format-device.sh`, `post-format.sh`. Reuse the existing storage fixtures without duplicating their policy logic; a focused shared-fixture extraction from `tests-shell/test_storage.py` is allowed if needed.
 
 **Interfaces:** Consume Task 1 validation. Both public entry points require all three selection arguments. Produce actual selected swap/data partition paths for post-format configuration. One atomic setup lock covers formatting and post-format work; direct formatting shares the same exclusion.
 
