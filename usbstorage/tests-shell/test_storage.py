@@ -34,6 +34,13 @@ class StorageFixture(unittest.TestCase):
         self.write("/proc/sys/kernel/random/boot_id", BOOT)
         self.write("/proc/cmdline", "console=ttyS0 root=ubi0:rootfs")
         self.write("/proc/swaps", "Filename\tType\tSize\tUsed\tPriority\n")
+        self.write("/proc/self/ns/mnt", "mnt:[100]")
+        self.link("/proc/self/root", "/")
+        self.link("/proc/1/root", "/")
+        self.link("/proc/1/task/1/root", "/")
+        self.write("/proc/1/task/1/ns/mnt", "mnt:[100]")
+        self.write("/proc/2/status", "Name:\tkthreadd\nPid:\t2\nKthread:\t1\n")
+        self.write("/proc/2/task/2/status", "Name:\tkthreadd\nPid:\t2\nKthread:\t1\n")
         self.write("/proc/mtd", 'dev: size erasesize name\nmtd4: 01000000 00020000 "ubi"\n')
         self.mtd_path = "/sys/devices/platform/spi0/spi0.0/mtd/mtd4"
         self.write(f"{self.mtd_path}/type", "nand")
@@ -55,12 +62,29 @@ class StorageFixture(unittest.TestCase):
             path = self.root / "commands" / name
             path.write_text(refusing)
             path.chmod(0o755)
+        # Stock-style numeric ls is the only rdev primitive. stat must never
+        # fall through to host GNU tools, including in inventory/boundary tests.
+        self.write("/commands/stat", "#!/bin/sh\nexit 127\n")
+        (self.root / "commands/stat").chmod(0o755)
+        self.write("/commands/ls", '''#!/bin/sh
+[ "$#" = 2 ] && [ "$1" = -dnL ] || exit 96
+case "$2" in "$FX"/dev/*) ;; *) exit 96;; esac
+node=${2##*/}
+[ -f "$2" ] || exit 96
+if [ -f "$FX/rdev/$node" ]; then kind=b; pair=$(cat "$FX/rdev/$node")
+elif [ -f "$FX/chrdev/$node" ]; then kind=c; pair=$(cat "$FX/chrdev/$node")
+else exit 96; fi
+printf '%srw------- 1 0 0 %s, %s Nov 12 00:00 %s\\n' "$kind" "${pair%:*}" "${pair#*:}" "$2"
+''')
+        (self.root / "commands/ls").chmod(0o755)
         self.env = dict(os.environ, FX=str(self.root),
                         REFUSAL_LOG=str(self.root / "refused"),
                         PATH=f"{self.root / 'commands'}:/usr/bin:/bin")
         # Only narrow I/O readers change. Policy and JSON serialization remain real.
         self.readers = r'''
 storage_read_file() { cat "$FX$1"; }
+storage_readlink() { cat "$FX$1"; }
+storage_same_file() { [ "$FX$1" -ef "$FX$2" ]; }
 storage_list_dir() {
     [ -d "$FX$1" ] || return 1
     for entry in "$FX$1"/*; do
@@ -78,8 +102,12 @@ storage_is_block() (
     canonical=$(storage_realpath "$1") || return 1
     [ -f "$FX$canonical" ] && [ -f "$FX/rdev/${canonical##*/}" ]
 )
-storage_block_mm() { cat "$FX/rdev/${1##*/}"; }
-storage_char_mm() { cat "$FX/chrdev/${1##*/}"; }
+storage_block_mm() (
+    storage_is_block "$1" || return 1
+    canonical=$(storage_realpath "$1") || return 1
+    storage_rdev_mm "$FX$canonical"
+)
+storage_char_mm() { storage_rdev_mm "$FX$1"; }
 storage_read_fstab() { cat "$FX/etc/config/fstab"; }
 '''
         self.mock_partition_reader = r'''
@@ -167,7 +195,10 @@ storage_partition_value() {
             if len(fields) >= 5 and fields[4].startswith("/"):
                 point = fields[4].replace("\\040", " ").replace("\\134", "\\")
                 (self.root / point.lstrip("/")).mkdir(parents=True, exist_ok=True)
-        self.write("/proc/self/mountinfo", "\n".join(self.mounts) + "\n")
+        rows = list(self.mounts)
+        if not any(len(row.split()) >= 5 and row.split()[4] == "/proc" for row in rows):
+            rows.append("99 1 0:99 / /proc rw - proc proc rw")
+        self.write("/proc/self/mountinfo", "\n".join(rows) + "\n")
 
     def run_shell(self, body, extra=""):
         readers = self.readers
@@ -903,11 +934,11 @@ esac
         self.link("/sys/class/block/sda1", "/sys/devices/orphan/sda1")
         self.assert_global_error()
 
-    def test_real_rdev_reader_parses_stat_hex_on_fixture_only(self):
-        probe = self.root / "commands/stat"
+    def test_real_rdev_reader_parses_numeric_ls_on_fixture_only(self):
+        probe = self.root / "commands/ls"
         probe.write_text('''#!/bin/sh
-[ "$#" = 4 ] && [ "$1" = -L ] && [ "$2" = -c ] && [ "$3" = '%t:%T' ] && [ "$4" = "$FX/dev/sda" ] || exit 96
-printf '8:10'
+[ "$#" = 2 ] && [ "$1" = -dnL ] && [ "$2" = "$FX/dev/sda" ] || exit 96
+printf 'brw------- 1 0 0 8, 16 Nov 12 00:00 device\n'
 ''')
         probe.chmod(0o755)
         extra = f'. {shlex.quote(str(COMMON))}\n' + r'''

@@ -7,6 +7,10 @@
 # Readers are deliberately small. Installed callers use only these real paths.
 storage_read_file() { cat "$1"; }
 storage_realpath() { readlink -f "$1"; }
+storage_readlink() { readlink "$1"; }
+# BusyBox test/ash on the OpenWrt target provides this read-only inode comparison.
+# shellcheck disable=SC3013
+storage_same_file() { [ "$1" -ef "$2" ]; }
 storage_path_exists() { [ -e "$1" ]; }
 storage_is_symlink() { [ -L "$1" ]; }
 storage_is_block() { [ -b "$1" ]; }
@@ -19,12 +23,17 @@ storage_char_mm() (
     storage_rdev_mm "$1"
 )
 storage_rdev_mm() (
-    pair=$(stat -L -c '%t:%T' "$1") || return 1
-    major=${pair%:*}; minor=${pair#*:}
-    case "$major" in ''|*[!0-9a-fA-F]*) return 1;; esac
-    case "$minor" in ''|*[!0-9a-fA-F]*) return 1;; esac
-    [ "${#major}" -le 8 ] && [ "${#minor}" -le 8 ] || return 1
-    printf '%d:%d\n' "0x$major" "0x$minor"
+    # Stock OpenWrt enables ls -n/-d/-L, but not stat. Numeric long output
+    # prints st_rdev (not st_dev) for block/character nodes. Never parse names.
+    listing=$(LC_ALL=C ls -dnL "$1") || return 1
+    pair=$(printf '%s\n' "$listing" | LC_ALL=C awk '
+        NR!=1 || NF<7 || length($1)!=10 || $1!~/^[bc][-rwxStTs]+$/ ||
+        $2!~/^[0-9]+$/ || $3!~/^[0-9]+$/ || $4!~/^[0-9]+$/ ||
+        $5!~/^[0-9]+,$/ || $6!~/^[0-9]+$/ {bad=1}
+        {major=$5;sub(/,$/,"",major);minor=$6}
+        END {if(bad || NR!=1)exit 1;print major ":" minor}') || return 1
+    storage_mm_valid "$pair" || return 1
+    printf '%s\n' "$pair"
 )
 storage_list_dir() (
     [ -d "$1" ] && [ -r "$1" ] && [ -x "$1" ] || return 1
@@ -346,6 +355,183 @@ EOF
     esac
 )
 
+# Process mountinfo is root-filtered by the kernel. A namespace needs a
+# representative rooted at the host /, not merely any readable jailed process.
+# Two process/thread scans catch newly observed namespaces; this is not an
+# atomic snapshot against external root, or coverage of processless handles.
+storage_namespace_id() (
+    value=$(storage_readlink "$1/ns/mnt") || return 1
+    printf '%s\n' "$value" | LC_ALL=C awk '
+        /^mnt:\[[0-9]+\]$/ {ok=1} END {exit !(ok && NR==1)}' || return 1
+    printf '%s\n' "$value"
+)
+storage_task_without_namespace() (
+    status=$(storage_read_file "$1/status") || return 1
+    printf '%s\n' "$status" | awk -v tid="${1##*/}" '
+        $1=="Pid:" && $2==tid {pid++}
+        $1=="Kthread:" && $2==1 {kernel++}
+        $1=="State:" && ($2=="Z" || $2=="X") {dead++}
+        END {exit !(pid==1 && (kernel==1 || dead==1))}'
+)
+storage_namespace_views() (
+    processes=$(storage_list_dir /proc) || return 1
+    while IFS= read -r pid; do
+        case "$pid" in ''|*[!0-9]*) continue;; esac
+        tasks=$(storage_list_dir "/proc/$pid/task") || {
+            storage_path_exists "/proc/$pid" && return 1
+            continue
+        }
+        [ -n "$tasks" ] || return 1
+        while IFS= read -r tid; do
+            storage_uint "$tid" || return 1
+            task=/proc/$pid/task/$tid
+            # Kernel workers and zombies may retain an nsproxy but no fs root.
+            storage_task_without_namespace "$task" 2>/dev/null && continue
+            if ! ns=$(storage_namespace_id "$task" 2>/dev/null); then
+                if storage_path_exists "$task"; then
+                    storage_task_without_namespace "$task" || return 1
+                fi
+                continue
+            fi
+            [ "$ns" = "$(storage_namespace_id "$task")" ] || return 1
+            # '-' records an observed namespace, but cannot establish coverage.
+            if storage_same_file "$task/root" /proc/1/root; then printf '%s %s\n' "$ns" "$task"
+            else printf '%s -\n' "$ns"; fi
+        done <<EOF
+$tasks
+EOF
+    done <<EOF
+$processes
+EOF
+)
+storage_parse_mounts() {
+    LC_ALL=C awk '
+        {sep=0;for(i=7;i<=NF;i++)if($i=="-"){sep=i;break}
+         if(NF<10 || !sep || NF!=sep+3 || $1!~/^[0-9]+$/ || $2!~/^[0-9]+$/ ||
+            $3!~/^[0-9]+:[0-9]+$/ || $4!~/^\// || $5!~/^\//)exit 1
+         print $3,$5,$(sep+1),$(sep+2),$(sep+3)}
+        END {if(NR==0)exit 1}'
+}
+storage_mount_snapshot() {
+    ST_MOUNTS=; ST_FOREIGN_MOUNTS=
+    st_raw=$(storage_read_file /proc/self/mountinfo) || return 1
+    ST_MOUNTS=$(printf '%s\n' "$st_raw" | storage_parse_mounts) || return 1
+    # A restricted or nested procfs cannot enumerate host processes. Kernel
+    # kthreadd exists only in the initial PID namespace; users cannot set Kthread.
+    st_init=$(storage_read_file /proc/2/status) || return 1
+    printf '%s\n' "$st_init" | awk '
+        $1=="Name:" && $2=="kthreadd" {name++}
+        $1=="Pid:" && $2==2 {pid++}
+        $1=="Kthread:" && $2==1 {kernel++}
+        END {exit !(name==1 && pid==1 && kernel==1)}' || return 1
+    printf '%s\n' "$ST_MOUNTS" | awk '
+        $2=="/proc" && $3=="proc" {
+            proc++;n=split($5,a,",")
+            for(i=1;i<=n;i++)if((a[i]~/^hidepid=/ && a[i]!="hidepid=0") || a[i]~/^subset=/)bad=1
+        } END {exit !(proc==1 && !bad)}' || return 1
+    # A self/root link can spell '/' even in a chroot. Stock test -ef compares
+    # both st_dev and st_ino against initial PID 1's root, not that spelling.
+    storage_same_file /proc/self/root /proc/1/root || return 1
+    st_self_ns=$(storage_namespace_id /proc/self) || return 1
+    st_views=$(storage_namespace_views) || return 1
+    st_covered=$st_self_ns
+    while read -r st_ns st_task; do
+        if [ -z "$st_ns" ] || [ "$st_task" = - ]; then continue; fi
+        storage_contains "$st_covered" "$st_ns" && continue
+        [ "$(storage_namespace_id "$st_task")" = "$st_ns" ] &&
+            storage_same_file "$st_task/root" /proc/1/root || return 1
+        st_raw=$(storage_read_file "$st_task/mountinfo") || return 1
+        st_mounts=$(printf '%s\n' "$st_raw" | storage_parse_mounts) || return 1
+        [ "$(storage_namespace_id "$st_task")" = "$st_ns" ] &&
+            storage_same_file "$st_task/root" /proc/1/root || return 1
+        ST_FOREIGN_MOUNTS="$ST_FOREIGN_MOUNTS
+$st_mounts"
+        st_covered="$st_covered
+$st_ns"
+    done <<EOF
+$st_views
+EOF
+    st_fresh_views=$(storage_namespace_views) || return 1
+    while read -r st_ns st_task; do
+        [ -n "$st_ns" ] || continue
+        storage_contains "$st_covered" "$st_ns" || return 1
+    done <<EOF
+$st_views
+$st_fresh_views
+EOF
+    [ "$(storage_namespace_id /proc/self)" = "$st_self_ns" ] &&
+        storage_same_file /proc/self/root /proc/1/root
+}
+storage_foreign_backing() (
+    read -r mm point fs source options <<EOF
+$1
+EOF
+    [ "$fs" != btrfs ] || return 1
+    case "$mm" in 0:*) ;; *)
+        # A source path belongs to the other root. Only the kernel identity is
+        # meaningful here, even when that spelling happens to exist in our root.
+        node=$(storage_node_mm "$mm") || return 1
+        storage_backing_node "$node" 0; return $?;;
+    esac
+    case "$fs" in
+        proc|sysfs|tmpfs|ramfs|devtmpfs|devpts|cgroup|cgroup2|debugfs|tracefs|securityfs|configfs|pstore|bpf|mqueue|hugetlbfs|fusectl|binfmt_misc|nsfs) return 0;;
+    esac
+    # A kernel UBI number/name is global evidence; a foreign /dev alias is not.
+    # Character-backed anonymous filesystems need the same-superblock proof
+    # below if the source is a pathname, even when our root has that pathname.
+    case "$fs:$source" in ubifs:ubi[0-9]*:*) storage_flash "$source"; return $?;; esac
+    # Reuse proof only for the very same anonymous superblock and options.
+    # Never interpret foreign overlay paths against the formatter's root.
+    while read -r self_mm self_point self_fs self_source self_options; do
+        if [ "$self_mm:$self_fs:$self_source:$self_options" = "$mm:$fs:$source:$options" ]; then
+            storage_backing_mount "$self_mm $self_point $self_fs $self_source $self_options" 0
+            return $?
+        fi
+    done <<EOF
+$ST_MOUNTS
+EOF
+    return 1
+)
+storage_collect_foreign_usage() {
+    while IFS= read -r st_mount; do
+        [ -n "$st_mount" ] || continue
+        st_backing=$(storage_foreign_backing "$st_mount") || return 1
+        read -r _st_foreign_mm st_foreign_point _st_foreign_rest <<EOF
+$st_mount
+EOF
+        while IFS= read -r st_disk; do
+            case "$st_disk" in ''|flash|memory) continue;; esac
+            ST_USAGE="$ST_USAGE
+$st_disk mount $st_foreign_point"
+        done <<EOF
+$st_backing
+EOF
+    done <<EOF
+$ST_FOREIGN_MOUNTS
+EOF
+}
+storage_collect_loop_usage() {
+    # Configured loops need not appear in the backing device's sysfs holders.
+    st_loop_nodes=$(storage_list_dir /sys/class/block) || return 1
+    while IFS= read -r st_loop; do
+        [ -n "$st_loop" ] || continue
+        storage_path_exists "/sys/class/block/$st_loop/loop" || continue
+        st_backing_file=$(storage_read_file "/sys/class/block/$st_loop/loop/backing_file") || return 1
+        [ -n "$st_backing_file" ] || return 1
+        st_backing=$(storage_backing_node "$st_loop" 0) || return 1
+        [ "$(storage_read_file "/sys/class/block/$st_loop/loop/backing_file")" = "$st_backing_file" ] || return 1
+        while IFS= read -r st_disk; do
+            case "$st_disk" in ''|flash|memory) continue;; esac
+            ST_USAGE="$ST_USAGE
+$st_disk held $st_loop"
+        done <<EOF
+$st_backing
+EOF
+    done <<EOF
+$st_loop_nodes
+EOF
+}
+
 storage_collect() {
     ST_ERROR=; ST_SYSTEM=; ST_USAGE=; ST_DISKS=; ST_NODES=; ST_MOUNTS=
     # Do not erase a disk before discovering that /sd aliases an occupied path.
@@ -375,11 +561,9 @@ EOF
     done <<EOF
 $ST_NODES
 EOF
-    st_raw=$(storage_read_file /proc/self/mountinfo 2>/dev/null) || storage_error 'Cannot read mount usage.'
-    ST_MOUNTS=$(printf '%s\n' "$st_raw" | awk '
-        {sep=0;for(i=7;i<=NF;i++)if($i=="-"){sep=i;break}
-         if(NF<10 || !sep || NF!=sep+3 || $3 !~ /^[0-9]+:[0-9]+$/ || $5 !~ /^\//) exit 1
-         print $3,$5,$(sep+1),$(sep+2),$(sep+3)}') || storage_error 'Malformed mount information.'
+    storage_mount_snapshot 2>/dev/null || storage_error 'Cannot establish complete process mount-namespace visibility.'
+    storage_collect_foreign_usage 2>/dev/null || storage_error 'Cannot resolve foreign mounted backing storage.'
+    storage_collect_loop_usage 2>/dev/null || storage_error 'Cannot resolve configured loop ownership.'
     st_root_seen=; st_system_proven=
     while read -r st_mm st_point st_fs st_source st_options; do
         [ -n "$st_mm" ] || continue
@@ -453,8 +637,18 @@ EOF
 $st_swap_rows
 EOF
     st_fstab=$(storage_read_fstab 2>/dev/null) || storage_error 'Cannot inspect fstab configuration.'
-    st_targets=$(printf '%s\n' "$st_fstab" | awk -F= '
-        $1 ~ /^fstab\.[^.]+\.target$/ {value=substr($0,index($0,"=")+1);gsub(/^\047|\047$/,"",value);print value}')
+    # UCI show uses shell quoting, including '\'' for embedded apostrophes.
+    # Support only single, single-line scalar targets; refuse other encodings.
+    # This deliberately does not eval or partially strip producer quoting.
+    st_targets=$(printf '%s\n' "$st_fstab" | LC_ALL=C awk -F= '
+        /^$/ {next}
+        $0!~/^fstab\.[^. =]+(\.[^. =]+)?=/ {bad=1;next}
+        $1 ~ /^fstab\.[^.]+\.target$/ {
+            value=substr($0,index($0,"=")+1)
+            if(value!~/^\047[^\047]*\047$/ || value~/[[:cntrl:]]/) {bad=1;next}
+            value=substr(value,2,length(value)-2)
+            if(value=="")bad=1;else print value
+        } END {exit bad}') || storage_error 'Unsupported or malformed fstab target encoding.'
     while IFS= read -r st_target; do
         [ -n "$st_target" ] || continue
         case "$st_target" in /sd|/sd/*) storage_error 'Conflicting /sd fstab configuration.'; continue;;
@@ -495,13 +689,16 @@ storage_classify() {
         st_subsystem=$(storage_realpath "$st_ancestor/subsystem" 2>/dev/null)
         if [ "${st_subsystem##*/}" = usb ]; then
             ST_TRANSPORT=usb
-            # A root hub is fixed to its controller, not to its external ports.
+            # The first USB device (not interface) is the storage attachment.
+            # Its upstream hubs describe their own attachment, not this disk.
             st_devpath=$(storage_read_file "$st_ancestor/devpath" 2>/dev/null)
-            if [ "$st_devpath" != 0 ]; then
+            st_usb_type=$(storage_read_file "$st_ancestor/uevent" 2>/dev/null | awk -F= '$1=="DEVTYPE" {print $2}')
+            if [ "$st_usb_type" = usb_device ] && [ "$st_devpath" != 0 ]; then
                 st_location=$(storage_read_file "$st_ancestor/removable" 2>/dev/null)
                 st_port=$(storage_read_file "$st_ancestor/port/connect_type" 2>/dev/null)
                 case "$st_location:$st_port" in fixed:*|*:hardwired) ST_CONNECTION=fixed;;
-                    removable:*|*:hotplug) [ "$ST_CONNECTION" = fixed ] || ST_CONNECTION=removable;; esac
+                    removable:*|*:hotplug) ST_CONNECTION=removable;; esac
+                break
             fi
         fi
         st_ancestor=${st_ancestor%/*}
@@ -515,12 +712,15 @@ storage_evaluate() {
     ST_ID=$1; ST_REASON=$ST_ERROR; ST_PARTITIONS=; ST_SIZE=0
     ST_MODEL=$(storage_read_file "/sys/class/block/$1/device/model" 2>/dev/null)
     [ -n "$ST_MODEL" ] || ST_MODEL=$1
+    storage_block_mm "/dev/$1" >/dev/null 2>&1 || storage_block_reason 'Cannot read canonical device numbers (requires numeric ls -dnL).'
     ST_IDENTITY=$(storage_identity "$1" 2>/dev/null) || storage_block_reason 'Unknown or unstable disk identity.'
     st_sectors=$(storage_read_file "/sys/class/block/$1/size" 2>/dev/null)
     if storage_uint "$st_sectors"; then
         ST_SIZE=$(awk -v sectors="$st_sectors" 'BEGIN {printf "%.0f", sectors*512}')
         # 1 GiB swap, 16 MiB minimum data filesystem, 2 MiB alignment/table slack.
         [ "$st_sectors" -ge 2134016 ] || storage_block_reason 'Device is too small for 1 GiB swap and ext4.'
+        # sysfs size always counts 512-byte sectors, also on 4Kn media.
+        [ "$st_sectors" -le 4294967296 ] || storage_block_reason 'Device exceeds the retained DOS layout limit of 2 TiB (including 4Kn media).'
     else storage_block_reason 'Malformed device capacity.'; fi
     storage_classify "$1"
     if storage_contains "$ST_SYSTEM" "$1"; then storage_block_reason 'System backing disk.'; fi
@@ -559,6 +759,9 @@ EOF
     ST_SWAP_PATHS=$(printf '%s\n' "$ST_USAGE" | awk -v id="$ST_ID" '$1==id && $2=="swap" {print $3}')
     [ -z "$ST_SWAP_PATHS" ] || storage_block_reason 'Device is used by active swap.'
     [ -z "$ST_MOUNT_PATHS" ] || storage_block_reason 'Device or partition is mounted.'
+    if printf '%s\n' "$ST_USAGE" | awk -v id="$ST_ID" '$1==id && $2=="held" {held=1} END {exit !held}'; then
+        storage_block_reason 'Device or partition is held by a configured loop.'
+    fi
     [ "$ST_IDENTITY" = "$(storage_identity "$ST_ID" 2>/dev/null)" ] || storage_block_reason 'Disk identity changed during discovery.'
 }
 storage_json_paths() (

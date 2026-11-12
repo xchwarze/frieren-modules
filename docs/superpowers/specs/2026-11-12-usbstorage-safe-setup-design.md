@@ -105,3 +105,12 @@ Keep package and manifest versions consistent when preparing the module change. 
 ## Builder-owned decisions
 
 The builder chooses helper names, exact structured inventory encoding, identity-token representation, and the smallest practical test tools consistent with this policy and existing module conventions. Do not add production safety bypasses to make tests easier. Escalate any inability to identify backing storage or device generations on supported OpenWrt versions rather than weakening the fail-closed policy silently.
+
+## Final-review capability rulings
+
+- Supplement self mountinfo with two scans of host-visible processes and threads. Each observed mount namespace needs a readable full-host-root representative; a chroot-only view is not complete. Resolve foreign block mounts by kernel device identity, not foreign source spelling. Unrelated resolvable namespaces must retain eligible USB/SD. Refuse incomplete visibility, restricted/nested procfs, and unresolved ownership. Processless namespace handles and atomic protection against external root races are not claimed.
+- Reverse-resolve all configured loops independently of mount/swap reachability and sysfs holders. Repeat loop and namespace coverage at destructive and activation boundaries.
+- Keep canonical rdev checks with stock read-only numeric `ls -dnL`; do not add an inventory-only dependency. Refuse unsupported UCI target encodings without evaluating them.
+- Declare formatter dependency `swap-utils` and explicitly invoke its OpenWrt 24.10 `/usr/sbin/mkswap`. Verify UUID capability before partition-table destruction, including the libuuid parser rather than help text alone. Keep nonzero, distinct, uniquely owned selected UUIDs mandatory.
+- Use location evidence from the storage USB attachment, not an intermediate hub's own fixed attachment. Keep fixed storage refused and unknown-location warnings unchanged.
+- Retain DOS partitioning and refuse capacities above 2 TiB before every writer. This conservative byte bound also refuses larger valid 4Kn media; GPT remains out of scope.

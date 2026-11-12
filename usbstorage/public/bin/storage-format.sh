@@ -7,7 +7,31 @@
 SF_LOCK=; SF_CONFIG_TEMP=
 storage_lock_path() { printf '%s\n' /var/lock/usbstorage-setup.lock; }
 storage_fstab_path() { printf '%s\n' /etc/config/fstab; }
+storage_swap_writer() { /usr/sbin/mkswap "$@"; }
 storage_format_error() { printf '[!] %s\n' "$*" >&2; return 1; }
+
+storage_swap_preflight() (
+    # OpenWrt swap-utils installs this util-linux writer in /usr/sbin, unlike
+    # the stock UUID-less BusyBox applet in /sbin. These queries open no device.
+    if ! { version=$(LC_ALL=C storage_swap_writer --version) &&
+        help=$(LC_ALL=C storage_swap_writer --help); }; then
+            storage_format_error 'UUID-capable /usr/sbin/mkswap is unavailable; install swap-utils.'; return 1;
+    fi
+    if ! { printf '%s\n' "$version" | LC_ALL=C awk '
+        /^mkswap from util-linux [0-9][0-9.]*$/ {ok=1} END {exit !(ok && NR==1)}' &&
+        printf '%s\n' "$help" | grep -E '^[[:space:]]*-U, --uuid[[:space:]]+UUID[[:space:]]' >/dev/null; }; then
+            storage_format_error 'UUID-capable util-linux mkswap is required before partitioning; install swap-utils.'; return 1;
+    fi
+    # util-linux can advertise -U even when built without libuuid. With no
+    # device operand, an invalid UUID must fail in UUID parsing before any open.
+    # The no-libuuid build instead warns that it ignores -U; never accept that.
+    if diagnostic=$(LC_ALL=C storage_swap_writer --uuid invalid 2>&1); then
+        storage_format_error 'Swap writer did not reject an invalid UUID.'; return 1
+    fi
+    [ "$diagnostic" = 'mkswap: error: parsing UUID failed' ] || {
+        storage_format_error 'Swap writer UUID support cannot be verified before partitioning.'; return 1;
+    }
+)
 
 storage_unlock() {
     [ -z "$SF_CONFIG_TEMP" ] || rm -f "$SF_CONFIG_TEMP"
@@ -102,6 +126,7 @@ storage_capture_partitions() {
 # Format the device into a 1G swap partition + an ext4 data partition.
 # Busy devices are refused, never unmounted or swap-disabled.
 storage_format_selected() {
+    storage_swap_preflight || return 1
     echo '[+] Writing partition table (1G swap + ext4)...'
     storage_validate_target "$@" || return 1
     # printf (not "echo -e") feeds the interactive fdisk prompts: it expands \n
@@ -128,7 +153,7 @@ storage_format_selected() {
     storage_capture_partitions "$1" "$2" || return 1
     echo '[+] Formatting partitions...'
     storage_guard_partitions "$@" || return 1
-    mkswap "$SF_SWAP" || { storage_format_error 'mkswap failed.'; return 1; }
+    storage_swap_writer "$SF_SWAP" || { storage_format_error 'mkswap failed.'; return 1; }
     storage_guard_partitions "$@" || return 1
     mkfs.ext4 -F "$SF_DATA" || { storage_format_error 'mkfs.ext4 failed.'; return 1; }
     sync || return 1
@@ -151,6 +176,7 @@ storage_filesystem_uuid() (
             if(uuid!~/^UUID="[0-9a-fA-F-]+"$/)exit 1
             sub(/^UUID="/,"",uuid);sub(/"$/,"",uuid);n=split(uuid,a,"-")
             if(n!=5 || length(a[1])!=8 || length(a[2])!=4 || length(a[3])!=4 || length(a[4])!=4 || length(a[5])!=12)exit 1
+            if(uuid=="00000000-0000-0000-0000-000000000000")exit 1
             print tolower(uuid)
         }'
 )
@@ -165,20 +191,26 @@ storage_activation_guard() {
             storage_format_error 'The /sd destination changed.'; return 1;
         fi
     fi
-    sf_live_mounts=$(storage_read_file /proc/self/mountinfo) || return 1
+    storage_mount_snapshot || {
+        storage_format_error 'Cannot establish complete process mount-namespace visibility.'; return 1;
+    }
+    ST_USAGE=
+    if ! { storage_collect_foreign_usage && storage_collect_loop_usage; }; then
+        storage_format_error 'Cannot resolve live foreign mounts or loop ownership.'; return 1;
+    fi
+    if printf '%s\n' "$ST_USAGE" | awk -v id="$1" '$1==id {busy=1} END {exit !busy}'; then
+        storage_format_error 'Selected device acquired foreign mount or loop usage.'; return 1
+    fi
     sf_disk_mm=$(storage_block_mm "/dev/$1") || return 1
     sf_swap_mm=$(storage_block_mm "$SF_SWAP") || return 1
     sf_data_mm=$(storage_block_mm "$SF_DATA") || return 1
     # Swapfile backing must use this validated snapshot, including our new /sd mount.
     # storage_backing_path in storage-common.sh consumes this caller-owned context.
     # shellcheck disable=SC2034
-    ST_MOUNTS=$(printf '%s\n' "$sf_live_mounts" | awk -v disk="$sf_disk_mm" -v swap="$sf_swap_mm" -v data="$sf_data_mm" -v mounted="$3" '
-        {sep=0;for(i=7;i<=NF;i++)if($i=="-"){sep=i;break}
-         if(NF<10 || !sep || NF!=sep+3 || $3!~/^[0-9]+:[0-9]+$/ || $5!~/^\//)bad=1
-         print $3,$5,$(sep+1),$(sep+2),$(sep+3)}
-        $5=="/sd" && $3==data && mounted==1 && $(sep+1)=="ext4" {owned++;next}
-        $5=="/sd" || index($5,"/sd/")==1 || $3==disk || $3==swap || $3==data {bad=1}
-        END {exit (bad || owned!=mounted)}') || {
+    printf '%s\n' "$ST_MOUNTS" | awk -v disk="$sf_disk_mm" -v swap="$sf_swap_mm" -v data="$sf_data_mm" -v mounted="$3" '
+        $2=="/sd" && $1==data && mounted==1 && $3=="ext4" {owned++;next}
+        $2=="/sd" || index($2,"/sd/")==1 || $1==disk || $1==swap || $1==data {bad=1}
+        END {exit (bad || owned!=mounted)}' || {
         storage_format_error 'Selected device or /sd mount usage changed.'; return 1;
     }
     sf_live_swaps=$(storage_read_file /proc/swaps) || return 1

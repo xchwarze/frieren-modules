@@ -11,7 +11,7 @@ import unittest
 from test_storage import BOOT, COMMON, IDENTITY, MODULE, StorageFixture
 
 
-class FormattingTests(StorageFixture):
+class FormattingFixture(StorageFixture):
     def setUp(self):
         super().setUp()
         self.disk("sdb", "8:16")
@@ -33,6 +33,7 @@ storage_read_file() {
 storage_lock_path() { printf '%s\n' "$FX/setup.lock"; }
 storage_fstab_path() { printf '%s\n' "$FX/config/fstab"; }
 storage_install_environment() { fx-environment "$@"; }
+storage_swap_writer() { fx-mkswap "$@"; }
 ''')
         self.partition(name="sda1")
         self.partition(name="sda2", mm="8:2", number=2)
@@ -53,7 +54,7 @@ storage_install_environment() { fx-environment "$@"; }
         double.chmod(0o755)
         for name in ("fdisk", "mkswap", "mkfs.ext4", "mount", "swapon", "block",
                      "sleep", "sync", "fx-collect", "fx-environment", "mkdir", "rmdir",
-                     "cp", "mv", "rm", "mktemp"):
+                      "cp", "mv", "rm", "mktemp", "fx-mkswap"):
             path = self.root / "commands" / name
             if path.exists():
                 path.unlink()
@@ -81,6 +82,36 @@ storage_install_environment() { fx-environment "$@"; }
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertNotIn("completed successfully", result.stdout.lower())
         self.assertFalse((self.root / "setup.lock").exists(), result.stderr)
+
+    def reset_mutation(self):
+        for file in ("collect-count", "collect-mutation", "collect-at", "sleep-mutation",
+                     "mkswap-mutation", "mkfs.ext4-mutation"):
+            (self.root / file).unlink(missing_ok=True)
+        self.attr("sda", "diskseq", "12")
+        self.attr("sda", "ro", "0")
+        self.attr("sda", "size", "16777216")
+        (self.root / self.paths["sda"].lstrip("/") / "holders/dm-1").unlink(missing_ok=True)
+        if not (self.root / "sys/class/block/sda").exists():
+            self.link("/sys/class/block/sda", self.paths["sda"])
+        self.write("/proc/swaps", "Filename Type Size Used Priority\n")
+        self.sync_mounts()
+        self.write("/etc/config/fstab", "fstab.other=mount\nfstab.other.target='/media'\n")
+
+    def wait_entered(self, stage):
+        for _ in range(500):
+            if (self.root / f"{stage}-entered").exists():
+                return
+            time.sleep(0.01)
+        self.fail(f"Operation never entered {stage}")
+
+    @staticmethod
+    def stop_process(process):
+        if process.poll() is None:
+            process.kill()
+        process.communicate()
+
+
+class FormattingTests(FormattingFixture):
 
     def test_both_entrypoints_require_exact_explicit_selection(self):
         for entry in ("auto-setup.sh", "format-device.sh"):
@@ -124,20 +155,6 @@ storage_install_environment() { fx-environment "$@"; }
                     self.assert_failed(self.invoke(entry))
                     self.assertEqual(self.writers(), [])
                     self.reset_mutation()
-
-    def reset_mutation(self):
-        for file in ("collect-count", "collect-mutation", "collect-at", "sleep-mutation",
-                     "mkswap-mutation", "mkfs.ext4-mutation"):
-            (self.root / file).unlink(missing_ok=True)
-        self.attr("sda", "diskseq", "12")
-        self.attr("sda", "ro", "0")
-        self.attr("sda", "size", "16777216")
-        (self.root / self.paths["sda"].lstrip("/") / "holders/dm-1").unlink(missing_ok=True)
-        if not (self.root / "sys/class/block/sda").exists():
-            self.link("/sys/class/block/sda", self.paths["sda"])
-        self.write("/proc/swaps", "Filename Type Size Used Priority\n")
-        self.sync_mounts()
-        self.write("/etc/config/fstab", "fstab.other=mount\nfstab.other.target='/media'\n")
 
     def test_rechecks_usage_and_identity_at_each_destructive_boundary(self):
         for stage, expected in (("collect", []), ("sleep", ["fdisk"]),
@@ -328,19 +345,6 @@ storage_install_environment() { fx-environment "$@"; }
         self.assertFalse((self.root / "setup.lock").exists())
         self.assertEqual(self.writers(), [["fdisk", "/dev/sda"]])
 
-    def wait_entered(self, stage):
-        for _ in range(500):
-            if (self.root / f"{stage}-entered").exists():
-                return
-            time.sleep(0.01)
-        self.fail(f"Operation never entered {stage}")
-
-    @staticmethod
-    def stop_process(process):
-        if process.poll() is None:
-            process.kill()
-        process.communicate()
-
     def test_shared_lock_covers_formatting_and_post_format_work(self):
         for stage in ("fdisk", "fx-environment"):
             with self.subTest(stage=stage):
@@ -428,6 +432,27 @@ def mutate(mode):
         (root / "sd/foreign.swap").write_text("fixture unexpected swapfile")
         with (root / "proc/swaps").open("a") as file:
             file.write("/sd/foreign.swap file 100 0 -2\n")
+    elif mode == "foreign-mount":
+        base = root / "proc/4321/task/4321"
+        (base / "ns").mkdir(parents=True, exist_ok=True)
+        (base / "ns/mnt").write_text("mnt:[200]")
+        if not (base / "root").exists():
+            (base / "root").symlink_to(root)
+        (base / "mountinfo").write_text("1 0 8:1 / /private rw - ext4 /jail-device rw\n")
+    elif mode == "configured-loop":
+        base = root / "sys/devices/virtual/block/loop0"
+        for directory in ("holders", "slaves", "loop"):
+            (base / directory).mkdir(parents=True, exist_ok=True)
+        (base / "loop/backing_file").write_text("/dev/sda1")
+        (base / "dev").write_text("7:0")
+        for name in ("sys/class/block/loop0", "sys/dev/block/7:0"):
+            link = root / name
+            if not link.exists():
+                link.symlink_to(os.path.relpath(base, link.parent))
+    elif mode == "quoted-alias":
+        (root / "sd").mkdir(exist_ok=True)
+        (root / "owner'volume").symlink_to(root / "sd")
+        (root / "etc/config/fstab").write_text("fstab.owner=mount\nfstab.owner.target='/owner'\\''volume'\n")
     else:
         refuse()
 
@@ -448,7 +473,32 @@ elif command == "fdisk":
     if args != [selected] or sys.stdin.read() != "o\nn\np\n1\n\n+1G\nt\n82\nn\np\n2\n\n\nw\n":
         refuse()
     device(args[0])
-elif command == "mkswap":
+elif command == "fx-mkswap" and args in (["--version"], ["--help"]):
+    mode_file = root / "swap-writer-mode"
+    mode = mode_file.read_text() if mode_file.exists() else "uuid"
+    with (root / "calls").open("a") as log:
+        log.write(json.dumps(["mkswap-capability", *args]) + "\n")
+    if mode == "missing":
+        sys.exit(127)
+    if mode == "busybox":
+        print("BusyBox v1.36.1 mkswap [-L LBL] BLOCKDEV [SIZE]")
+        sys.exit(1)
+    print("mkswap from util-linux 2.40.2" if args == ["--version"] else
+          (" -U, --uuid UUID specify the uuid to use" if mode in ("uuid", "no-libuuid") else "Usage: mkswap device"))
+    sys.exit(0)
+elif command == "fx-mkswap" and args == ["--uuid", "invalid"]:
+    mode_file = root / "swap-writer-mode"
+    mode = mode_file.read_text() if mode_file.exists() else "uuid"
+    with (root / "calls").open("a") as log:
+        log.write(json.dumps(["mkswap-capability", *args]) + "\n")
+    if mode == "no-libuuid":
+        print("mkswap: warning: ignoring -U (UUIDs are unsupported by mkswap)", file=sys.stderr)
+        print("mkswap: error: Nowhere to set up swap on?", file=sys.stderr)
+    else:
+        print("mkswap: error: parsing UUID failed", file=sys.stderr)
+    sys.exit(1)
+elif command in ("mkswap", "fx-mkswap"):
+    command = "mkswap"
     if args != [swap]:
         refuse()
     device(swap)
@@ -462,6 +512,8 @@ elif command == "block":
     device(args[1])
     if (root / "bad-probe").exists():
         print((root / "bad-probe").read_text())
+    elif args[1] == swap and (root / "bad-swap-probe").exists():
+        print((root / "bad-swap-probe").read_text())
     else:
         uuid, kind = ("11111111-1111-1111-1111-111111111111", "swap") if args[1] == swap else ("22222222-2222-2222-2222-222222222222", "ext4")
         print(f'{args[1]}: UUID="{uuid}" TYPE="{kind}"')
