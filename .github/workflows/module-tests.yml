@@ -1,0 +1,76 @@
+name: Module tests
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      modules: ${{ steps.select.outputs.modules }}
+    defaults:
+      run:
+        working-directory: modules
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: modules
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test changed-module selection
+        run: python3 -m unittest discover -s .github/tests -p 'test_*.py' -v
+      - name: Select modules with ci/test.sh
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          python3 .github/scripts/changed_modules.py \
+            --event "$EVENT_NAME" --base "$BASE_SHA" \
+            --head "$HEAD_SHA" --before "$BEFORE_SHA"
+
+  modules:
+    needs: detect
+    if: needs.detect.outputs.modules != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.detect.outputs.modules) }}
+    defaults:
+      run:
+        working-directory: modules/${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: modules
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: xchwarze/frieren
+          # Read-only shared source, matching the reviewed local dependency.
+          ref: fe87f8f36c2147d8ed6c11a59b0e11c8c99ee9ec
+          path: frieren
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      # Enable Corepack before any module requests Yarn or its cache.
+      - run: corepack enable
+      - name: Run module-owned checks
+        run: sh ci/test.sh
