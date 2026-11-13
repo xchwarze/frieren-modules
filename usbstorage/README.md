@@ -68,6 +68,14 @@ Setup sends exactly `{module: 'usbstorage', action: 'startAutoSetup', deviceId, 
 
 ## Focused verification (no hardware)
 
+The module opts into common CI through `ci/test.sh`. Run the complete check from `usbstorage` with the sibling framework checkout described below:
+
+```sh
+sh ci/test.sh
+```
+
+The entrypoint runs shell syntax/static checks, all 119 shell fixtures, PHP lint and 168 PHP assertions, all 30 UI tests, a headless build, schema validation, and package/manifest version matching. It installs locked UI dependencies, sets the shared-source alias, and disables the interactive analyzer. `PHP_BIN` optionally selects a local PHP CLI path (default: `php`); it does not change production code or safety checks.
+
 From the repository root:
 
 ```sh
@@ -94,7 +102,7 @@ Use a current Node 22 patch release (test DOM dependencies require **22.22.2+**)
 
 The existing production config enables an interactive bundle analyzer that opens a browser and starts a local server. Disable it with `VITE_ANALYZER_ENABLE=false` for headless builds; this does not change the production bundle's functionality. CI uses this override without changing the shared build config.
 
-`.github/workflows/usbstorage-tests.yml` runs Ubuntu 24.04 shell fixtures/static checks, PHP 8.2–8.4 syntax/tests, and Node 22 UI tests/build/schema validation. Only the UI job checks out pinned framework source for the shared aliases. CI does not build release tarballs, publish, or touch physical storage.
+`.github/workflows/module-tests.yml` runs this entrypoint once when the module changes, or when shared CI changes or a manual run select all opted-in modules. The standard environment is Ubuntu 24.04, Node 22, PHP 8.2 (the framework minimum baseline), Python 3, and ShellCheck, with pinned sibling framework source for the shared aliases. This CI tests PHP 8.2 only, not multiple PHP versions. Locked dependency installation retains the existing TypeScript peer warning; no dependency contract changes are needed. CI does not build release tarballs, publish, or touch physical storage. See the root README for module registration and fork approval/security behavior.
 
 ## License
 
