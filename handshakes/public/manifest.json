@@ -1,0 +1,30 @@
+{
+  "title": "Handshakes",
+  "name": "handshakes",
+  "description": "Capture and manage WPA handshakes with airodump-ng, plus optional deauth",
+  "icon": "target",
+  "authors": [
+    {
+      "name": "DSR!",
+      "email": "xchwarze@gmail.com"
+    }
+  ],
+  "keywords": [
+    "wifi",
+    "handshake",
+    "aircrack"
+  ],
+  "repository": "https://github.com/xchwarze/frieren-modules/tree/master/handshakes",
+  "documentation": "https://github.com/xchwarze/frieren-modules/tree/master/handshakes#readme",
+  "license": "LGPL-3.0-or-later",
+  "guestType": [
+    "OpenWrt"
+  ],
+  "dependencies": [
+    "aircrack-ng"
+  ],
+  "minPanelVersion": "1.0.0",
+  "system": false,
+  "forceSidebar": true,
+  "version": "1.0.0"
+}
