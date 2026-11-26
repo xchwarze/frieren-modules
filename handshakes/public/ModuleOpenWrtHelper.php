@@ -189,7 +189,7 @@ class ModuleOpenWrtHelper
     public static function listCaptures()
     {
         $dir = self::getStoragePath();
-        $entries = array_diff(scandir($dir, SCANDIR_SORT_DESCENDING) ?: [], ['.', '..']);
+        $entries = array_diff(@scandir($dir, SCANDIR_SORT_DESCENDING) ?: [], ['.', '..']);
         $captures = [];
 
         foreach ($entries as $name) {

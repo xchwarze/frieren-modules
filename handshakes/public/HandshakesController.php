@@ -58,7 +58,7 @@ class HandshakesController extends \frieren\core\Controller
             'interfaces' => ModuleOpenWrtHelper::getWirelessInterfaces(),
             'monitors' => ModuleOpenWrtHelper::getMonitorInterfaces(),
             'storagePath' => $storagePath,
-            'storageFree' => disk_free_space($storagePath) ?: 0,
+            'storageFree' => @disk_free_space($storagePath) ?: 0,
         ];
 
         if (ModuleOpenWrtHelper::toolsAvailable()) {
